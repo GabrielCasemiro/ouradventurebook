@@ -26,7 +26,7 @@ export function Curadoria({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = async (files: FileList | File[]) => {
-    const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    const list = Array.from(files).filter((f) => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name));
     if (!list.length) return;
     setUploading(true);
     try {
@@ -113,7 +113,7 @@ export function Curadoria({
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept="image/*,.heic,.heif"
           multiple
           hidden
           onChange={(e) => { if (e.target.files) handleFiles(e.target.files); e.target.value = ""; }}

@@ -5,6 +5,12 @@
 import sys
 from PIL import Image, ImageOps
 
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except Exception:
+    pass
+
 src, dest, maxdim = sys.argv[1], sys.argv[2], int(sys.argv[3])
 im = ImageOps.exif_transpose(Image.open(src)).convert("RGB")
 w, h = im.size
