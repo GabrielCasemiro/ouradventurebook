@@ -157,6 +157,16 @@ textarea { font-family: inherit; }
 .btn-upload:disabled { opacity: 0.6; cursor: default; }
 .btn-import { border: 0; background: transparent; color: var(--ink-soft); font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: underline; white-space: nowrap; }
 .btn-import:hover { color: var(--blue); }
+.del {
+  position: absolute; top: 8px; left: 8px; width: 34px; height: 34px; border-radius: 50%; border: 0;
+  background: rgba(12, 20, 50, 0.55); color: #fff; font-size: 15px; display: grid; place-items: center;
+  backdrop-filter: blur(4px); opacity: 0; transition: all 0.15s; z-index: 2;
+}
+.card:hover .del { opacity: 1; }
+.del:hover { background: var(--danger); transform: scale(1.1); }
+.btn-danger { border: 0; background: var(--danger); color: #fff; padding: 11px 20px; border-radius: 999px; font-weight: 700; font-size: 14px; cursor: pointer; transition: filter 0.15s; }
+.btn-danger:hover { filter: brightness(1.08); }
+.warn-line { background: rgba(216, 86, 75, 0.1); border: 1px solid rgba(216, 86, 75, 0.3); color: #8a2b22; padding: 12px 14px; border-radius: 10px; font-size: 14px; line-height: 1.5; }
 .upload-toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 80;
   background: rgba(9, 20, 58, 0.95); color: #eaf0ff; padding: 12px 20px; border-radius: 999px;
