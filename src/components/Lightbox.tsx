@@ -3,6 +3,54 @@ import { useApp } from "../App";
 import { thumbUrl } from "../lib/api";
 import type { Photo } from "../lib/types";
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const fmtDateTime = (iso: string) => {
+  if (!iso) return "";
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  const t = iso.slice(11, 16);
+  return `${d} ${MONTHS[m - 1]} ${y}${t ? " · " + t : ""}`;
+};
+const fmtShutter = (s?: number) => (s ? (s < 1 ? `1/${Math.round(1 / s)}s` : `${s}s`) : null);
+const fmtSize = (b?: number) => (!b ? null : b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`);
+
+function Details({ photo }: { photo: Photo }) {
+  const m = photo.meta || {};
+  const rows: [string, string][] = [];
+  if (photo.date) rows.push(["Taken", fmtDateTime(photo.date)]);
+  if (photo.width && photo.height) rows.push(["Size", `${photo.width} × ${photo.height}`]);
+  if (m.camera) rows.push(["Camera", m.camera]);
+  if (m.lens) rows.push(["Lens", m.lens]);
+  const exp = [
+    m.aperture && `ƒ/${m.aperture}`,
+    m.focalLength && `${Math.round(m.focalLength)}mm`,
+    m.iso && `ISO ${m.iso}`,
+    fmtShutter(m.shutter),
+  ].filter(Boolean).join(" · ");
+  if (exp) rows.push(["Exposure", exp]);
+  if (m.filesize) rows.push(["File", fmtSize(m.filesize)!]);
+
+  return (
+    <dl className="lb-details">
+      {rows.map(([k, v]) => (
+        <div key={k}>
+          <dt>{k}</dt>
+          <dd>{v}</dd>
+        </div>
+      ))}
+      {m.lat != null && m.lng != null && (
+        <div>
+          <dt>Location</dt>
+          <dd>
+            <a href={`https://maps.google.com/?q=${m.lat},${m.lng}`} target="_blank" rel="noreferrer">
+              📍 {m.lat.toFixed(4)}, {m.lng.toFixed(4)}
+            </a>
+          </dd>
+        </div>
+      )}
+    </dl>
+  );
+}
+
 export function Lightbox({
   uuid,
   photos,
@@ -78,6 +126,7 @@ export function Lightbox({
             value={st.caption || ""}
             onChange={(e) => patchPhoto(uuid, { caption: e.target.value })}
           />
+          <Details photo={photo} />
           <p className="lb-hint">← → to navigate · Esc to close</p>
         </div>
       </div>

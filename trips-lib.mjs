@@ -76,3 +76,20 @@ export function resolveSlugFromArgs(argv = process.argv) {
 
 export const DEFAULT_MATTE = { padColor: "FFFFFF" };
 export const DEFAULT_BOOK = { pageW: 210, pageH: 300 };
+
+// Compact EXIF/location metadata for a photo (from osxphotos JSON) for the lightbox.
+export function photoMeta(p) {
+  const e = p.exif_info || {};
+  const m = {};
+  const cam = [e.camera_make, e.camera_model].filter(Boolean).join(" ").trim();
+  if (cam) m.camera = cam;
+  if (e.lens_model) m.lens = e.lens_model;
+  if (e.iso) m.iso = e.iso;
+  if (e.aperture) m.aperture = e.aperture;
+  if (e.focal_length) m.focalLength = e.focal_length;
+  if (e.shutter_speed) m.shutter = e.shutter_speed;
+  if (typeof p.latitude === "number") m.lat = p.latitude;
+  if (typeof p.longitude === "number") m.lng = p.longitude;
+  if (p.original_filesize) m.filesize = p.original_filesize;
+  return Object.keys(m).length ? m : undefined;
+}

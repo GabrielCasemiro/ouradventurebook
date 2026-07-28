@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { resolveSlugFromArgs, tripPaths, readConfig } from "../trips-lib.mjs";
+import { resolveSlugFromArgs, tripPaths, readConfig, photoMeta } from "../trips-lib.mjs";
 
 const MAX_DIM = 1600;
 const CONCURRENCY = 8;
@@ -77,7 +77,7 @@ async function main() {
     return {
       uuid, filename: p.original_filename || p.filename || uuid, date: localDate, dayIndex: dayIndexFor(localDate),
       width: p.width || p.original_width || 0, height: p.height || p.original_height || 0,
-      isFavorite: !!p.favorite, hasThumb, sig: dupSig(p),
+      isFavorite: !!p.favorite, hasThumb, sig: dupSig(p), meta: photoMeta(p),
     };
   }, CONCURRENCY);
 

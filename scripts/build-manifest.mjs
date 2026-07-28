@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { resolveSlugFromArgs, tripPaths, readConfig } from "../trips-lib.mjs";
+import { resolveSlugFromArgs, tripPaths, readConfig, photoMeta } from "../trips-lib.mjs";
 
 const die = (m) => { console.error("✖ " + m); process.exit(1); };
 const slug = resolveSlugFromArgs();
@@ -39,6 +39,7 @@ async function main() {
       width: p.width || p.original_width || 0,
       height: p.height || p.original_height || 0,
       isFavorite: !!p.favorite,
+      meta: photoMeta(p),
       hasThumb: fs.existsSync(path.join(tp.thumbs, `${p.uuid}.jpg`)),
       sig:
         p.fingerprint ||

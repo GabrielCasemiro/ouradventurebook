@@ -1,3 +1,15 @@
+export interface PhotoMeta {
+  camera?: string;
+  lens?: string;
+  iso?: number;
+  aperture?: number;
+  focalLength?: number;
+  shutter?: number;
+  lat?: number;
+  lng?: number;
+  filesize?: number;
+}
+
 export interface Photo {
   uuid: string;
   filename: string;
@@ -8,6 +20,7 @@ export interface Photo {
   isFavorite: boolean;
   hasThumb: boolean;
   sig?: string;
+  meta?: PhotoMeta;
 }
 
 export interface DayInfo {
