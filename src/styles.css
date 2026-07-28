@@ -628,6 +628,22 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 }
 .trip-card.new:hover { background: rgba(255, 255, 255, 0.1); border-style: solid; }
 .trip-new-plus { font-size: 40px; line-height: 1; }
+.home-head { position: relative; }
+.home-new { position: absolute; top: 6px; right: 0; }
+.home-section { margin-top: 40px; }
+.home-section-title {
+  font-family: var(--font-display); font-weight: 600; color: var(--gold-soft); font-size: 14px;
+  text-transform: uppercase; letter-spacing: 2.5px; margin: 0 0 16px; padding-bottom: 9px;
+  border-bottom: 1px solid rgba(244, 212, 136, 0.2);
+}
+.trip-card { position: relative; }
+.trip-soon {
+  position: absolute; top: 14px; right: 14px; z-index: 1;
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold)); color: #3a2a05;
+  font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+}
+.trip-card.new.solo { max-width: 300px; margin: 30px auto 0; }
+@media (max-width: 640px) { .home-new { position: static; margin-top: 14px; } }
 
 .nt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
 .nt-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
