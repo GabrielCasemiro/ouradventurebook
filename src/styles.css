@@ -155,6 +155,19 @@ textarea { font-family: inherit; }
 }
 .btn-upload:hover:not(:disabled) { background: var(--blue); color: #fff; }
 .btn-upload:disabled { opacity: 0.6; cursor: default; }
+.btn-import { border: 0; background: transparent; color: var(--ink-soft); font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: underline; white-space: nowrap; }
+.btn-import:hover { color: var(--blue); }
+.upload-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 80;
+  background: rgba(9, 20, 58, 0.95); color: #eaf0ff; padding: 12px 20px; border-radius: 999px;
+  font-weight: 600; font-size: 14px; box-shadow: var(--shadow-lg); border: 1px solid rgba(244, 212, 136, 0.3);
+  animation: toastin 0.25s ease;
+}
+@keyframes toastin { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.modal.sm { width: min(460px, 100%); }
+.dupe-actions { display: flex; gap: 10px; margin-top: 22px; }
+.btn-ghost.dark { border: 1px solid var(--line); background: transparent; color: var(--ink); }
+.btn-ghost.dark:hover { background: var(--paper-2); }
 .gallery-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 16px; }
 .gallery-head h2 { font-family: var(--font-display); font-weight: 600; font-size: 26px; margin: 0; }
 .gallery-head p { margin: 4px 0 0; font-size: 13px; }

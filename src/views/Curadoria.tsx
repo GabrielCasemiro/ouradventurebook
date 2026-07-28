@@ -17,24 +17,47 @@ export function Curadoria({
   activeDay: number;
   setActiveDay: (d: number) => void;
 }) {
-  const { slug, manifest, project, patchPhoto, reloadManifest } = useApp();
+  const { slug, config, manifest, project, patchPhoto, reloadManifest } = useApp();
   const [onlyChosen, setOnlyChosen] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [hideDupes, setHideDupes] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [dupe, setDupe] = useState<{ files: File[]; count: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleFiles = async (files: FileList | File[]) => {
-    const list = Array.from(files).filter((f) => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name));
-    if (!list.length) return;
+  const uploadedNames = useMemo(
+    () => new Set(manifest.photos.filter((p) => p.source === "upload").map((p) => p.filename)),
+    [manifest]
+  );
+
+  const doUpload = async (files: File[], mode: "keepboth" | "replace") => {
+    setDupe(null);
     setUploading(true);
     try {
-      await api.uploadPhotos(slug, list, activeDay);
+      const r = await api.uploadPhotos(slug, files, activeDay, mode);
       await reloadManifest();
+      const parts: string[] = [];
+      if (r.added) parts.push(`${r.added} added`);
+      if (r.replaced) parts.push(`${r.replaced} replaced`);
+      if (r.failed) parts.push(`${r.failed} skipped`);
+      setToast(`✓ ${parts.join(" · ") || "nothing"} — on Day ${r.dayIndex}`);
+    } catch {
+      setToast("Upload failed");
     } finally {
       setUploading(false);
+      window.setTimeout(() => setToast(null), 4500);
     }
+  };
+
+  const handleFiles = (files: FileList | File[]) => {
+    const list = Array.from(files).filter((f) => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name));
+    if (!list.length) return;
+    const dupes = list.filter((f) => uploadedNames.has(f.name)).length;
+    if (dupes > 0) setDupe({ files: list, count: dupes });
+    else doUpload(list, "keepboth");
   };
 
   const chosenByDay = useMemo(() => {
@@ -132,6 +155,9 @@ export function Curadoria({
             <button className="btn-upload" onClick={() => fileRef.current?.click()} disabled={uploading} title="Add photos from your computer to this day">
               {uploading ? "Adding…" : "＋ Add photos"}
             </button>
+            <button className="btn-import" onClick={() => setShowImport(true)} title="Optional: import from your Apple Photos library">
+              Import from Photos
+            </button>
             <label className="toggle">
               <input type="checkbox" checked={onlyChosen} onChange={(e) => setOnlyChosen(e.target.checked)} />
               <span>Only chosen</span>
@@ -164,6 +190,42 @@ export function Curadoria({
       </section>
 
       {lightbox && <Lightbox uuid={lightbox} onClose={() => setLightbox(null)} onNav={setLightbox} photos={dayPhotos} />}
+
+      {toast && <div className="upload-toast">{toast}</div>}
+
+      {showImport && (
+        <div className="modal-overlay" onClick={() => setShowImport(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setShowImport(false)}>✕</button>
+            <h2>Import from Apple Photos</h2>
+            <p className="muted">
+              Optional — pull photos from your macOS Photos library for this trip's dates. Run in your terminal (with Full
+              Disk Access), then reload the page. You can also just use “Add photos”.
+            </p>
+            <pre className="finish-log">{`osxphotos query --from-date ${config.queryFrom} --to-date ${config.queryTo} \\
+  --only-photos --mute --json > trips/${config.slug}/photos.json
+
+npm run thumbs -- ${config.slug}`}</pre>
+          </div>
+        </div>
+      )}
+
+      {dupe && (
+        <div className="modal-overlay" onClick={() => setDupe(null)}>
+          <div className="modal sm" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setDupe(null)}>✕</button>
+            <h2>Same name found</h2>
+            <p className="muted">
+              {dupe.count} of these {dupe.count > 1 ? "photos match names" : "photo matches a name"} you already added to this trip.
+              What should happen?
+            </p>
+            <div className="dupe-actions">
+              <button className="btn-primary" onClick={() => doUpload(dupe.files, "keepboth")}>Keep both</button>
+              <button className="btn-ghost dark" onClick={() => doUpload(dupe.files, "replace")}>Replace existing</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

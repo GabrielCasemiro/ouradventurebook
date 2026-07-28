@@ -46,7 +46,6 @@ const dayIndexFactory = (cfg) => {
 function mergedManifest(tp, cfg) {
   const base = readJSON(tp.manifest);
   const uploads = readJSON(tp.uploadsJson) || [];
-  if (!base && !uploads.length) return null;
   const startMs = Date.parse(cfg.startDate + "T00:00:00");
   const photos = [...(base?.photos || []), ...uploads];
   photos.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -134,9 +133,7 @@ app.get("/api/trips/:slug/config", withTrip, (req, res) => res.json(req.cfg));
 
 // ---- per-trip manifest / project -----------------------------------------
 app.get("/api/trips/:slug/manifest", withTrip, (req, res) => {
-  const manifest = mergedManifest(req.tp, req.cfg);
-  if (!manifest) return res.status(404).json({ error: "manifest_missing" });
-  res.json(manifest);
+  res.json(mergedManifest(req.tp, req.cfg));
 });
 
 // upload photos straight into the trip (no iCloud needed)
@@ -145,39 +142,58 @@ app.post("/api/trips/:slug/upload", withTrip, upload.array("files", 300), async 
   if (!files.length) return res.status(400).json({ error: "no_files" });
   const dayIndex = Math.max(1, Math.min(req.cfg.days, Number(req.body.dayIndex) || 1));
   const dayDate = new Date(Date.parse(req.cfg.startDate + "T00:00:00") + (dayIndex - 1) * 86400000).toISOString().slice(0, 10);
+  const replaceMode = req.body.mode === "replace";
 
   await fsp.mkdir(req.tp.uploads, { recursive: true });
   await fsp.mkdir(req.tp.thumbs, { recursive: true });
   await fsp.mkdir(req.tp.web, { recursive: true });
   const uploads = readJSON(req.tp.uploadsJson) || [];
-  let added = 0, failed = 0;
+  const byName = new Map();
+  if (replaceMode) for (const r of uploads) if (!byName.has(r.filename)) byName.set(r.filename, r);
+  let added = 0, replaced = 0, failed = 0;
 
   for (const f of files) {
-    const uuid = "up-" + crypto.randomUUID();
+    const existing = replaceMode ? byName.get(f.originalname) : null;
+    const uuid = existing ? existing.uuid : "up-" + crypto.randomUUID();
     const ext = (path.extname(f.originalname) || ".jpg").toLowerCase();
     const orig = path.join(req.tp.uploads, uuid + ext);
+    // when replacing, drop any previous original with a different extension
+    if (existing && fs.existsSync(req.tp.uploads)) {
+      for (const old of fs.readdirSync(req.tp.uploads)) {
+        if (old.startsWith(uuid + ".") && path.join(req.tp.uploads, old) !== orig) await fsp.unlink(path.join(req.tp.uploads, old)).catch(() => {});
+      }
+    }
     try { await fsp.rename(f.path, orig); } catch { await fsp.copyFile(f.path, orig); await fsp.unlink(f.path).catch(() => {}); }
 
     const info = await ingestUpload(orig, path.join(req.tp.thumbs, `${uuid}.jpg`), path.join(req.tp.web, `${uuid}.jpg`));
-    if (!info) { failed++; await fsp.unlink(orig).catch(() => {}); continue; }
+    if (!info) { failed++; if (!existing) await fsp.unlink(orig).catch(() => {}); continue; }
 
-    uploads.push({
-      uuid,
-      filename: f.originalname,
-      date: info.date || `${dayDate}T12:00:00`,
-      dayIndex, // always land on the day the user is viewing
-      width: info.width || 0,
-      height: info.height || 0,
-      isFavorite: false,
-      hasThumb: true,
-      sig: uuid,
-      meta: info.meta || undefined,
-      source: "upload",
-    });
-    added++;
+    if (existing) {
+      existing.width = info.width || existing.width;
+      existing.height = info.height || existing.height;
+      existing.date = info.date || existing.date;
+      existing.meta = info.meta || existing.meta;
+      existing.hasThumb = true;
+      replaced++;
+    } else {
+      uploads.push({
+        uuid,
+        filename: f.originalname,
+        date: info.date || `${dayDate}T12:00:00`,
+        dayIndex, // land on the day the user is viewing
+        width: info.width || 0,
+        height: info.height || 0,
+        isFavorite: false,
+        hasThumb: true,
+        sig: uuid,
+        meta: info.meta || undefined,
+        source: "upload",
+      });
+      added++;
+    }
   }
   await fsp.writeFile(req.tp.uploadsJson, JSON.stringify(uploads, null, 2));
-  res.json({ ok: true, added, failed });
+  res.json({ ok: true, added, replaced, failed, dayIndex });
 });
 
 app.get("/api/trips/:slug/project", withTrip, async (req, res) => {

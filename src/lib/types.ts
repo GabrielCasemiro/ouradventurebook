@@ -21,6 +21,7 @@ export interface Photo {
   hasThumb: boolean;
   sig?: string;
   meta?: PhotoMeta;
+  source?: string;
 }
 
 export interface DayInfo {

@@ -21,10 +21,16 @@ export const api = {
   exportPrepare: (slug: string, items: unknown[], options?: unknown): Promise<{ ok: boolean; count: number; command: string }> =>
     fetch(`${base(slug)}/export/prepare`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items, options }) }).then(j),
   exportFinish: (slug: string): Promise<{ ok: boolean; log: string }> => fetch(`${base(slug)}/export/finish`, { method: "POST" }).then(j),
-  uploadPhotos: (slug: string, files: FileList | File[], dayIndex: number): Promise<{ ok: boolean; added: number; failed: number }> => {
+  uploadPhotos: (
+    slug: string,
+    files: FileList | File[],
+    dayIndex: number,
+    mode: "keepboth" | "replace" = "keepboth"
+  ): Promise<{ ok: boolean; added: number; replaced: number; failed: number; dayIndex: number }> => {
     const fd = new FormData();
     for (const f of Array.from(files)) fd.append("files", f);
     fd.append("dayIndex", String(dayIndex));
+    fd.append("mode", mode);
     return fetch(`${base(slug)}/upload`, { method: "POST", body: fd }).then(j);
   },
 };

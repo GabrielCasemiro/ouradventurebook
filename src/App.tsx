@@ -54,8 +54,7 @@ export function App({ slug }: { slug: string }) {
         setProjectState(p);
       })
       .catch((e) => {
-        if (e.status === 404 && e.body?.error === "manifest_missing") setError("manifest");
-        else if (e.status === 404 && e.body?.error === "trip_not_found") setError("notfound");
+        if (e.status === 404 && e.body?.error === "trip_not_found") setError("notfound");
         else setError(String(e.message || e));
       });
   }, [slug]);
@@ -107,7 +106,6 @@ export function App({ slug }: { slug: string }) {
     return manifest.photos.filter((ph) => project.photos[ph.uuid]?.chosen);
   }, [manifest, project]);
 
-  if (error === "manifest" && config) return <ManifestMissing config={config} />;
   if (error === "notfound") return <ErrorScreen msg="Trip not found." />;
   if (error) return <ErrorScreen msg={error} />;
   if (!config || !manifest || !project) return <Splash />;
@@ -177,25 +175,6 @@ function SaveBadge({ status }: { status: SaveStatus }) {
 
 function Splash() {
   return <div className="splash"><div className="splash-star">✦</div><p>Opening the album…</p></div>;
-}
-
-function ManifestMissing({ config }: { config: TripConfig }) {
-  return (
-    <div className="setup">
-      <div className="setup-card">
-        <div className="splash-star">✦</div>
-        <h2>Import photos for "{config.title}"</h2>
-        <p>Run in your terminal, from the project root (with Full Disk Access enabled):</p>
-        <pre>{`# 1) photo metadata for the trip
-osxphotos query --from-date ${config.queryFrom} --to-date ${config.queryTo} \\
-  --only-photos --mute --json > trips/${config.slug}/photos.json
-
-# 2) thumbnails + catalog (local previews, no iCloud download)
-npm run thumbs -- ${config.slug}`}</pre>
-        <p className="setup-hint">Then reload this page. <a href="/">← all trips</a></p>
-      </div>
-    </div>
-  );
 }
 
 function ErrorScreen({ msg }: { msg: string }) {
