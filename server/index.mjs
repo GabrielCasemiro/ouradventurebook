@@ -1,13 +1,17 @@
 import express from "express";
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
+import os from "node:os";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
+import multer from "multer";
 import { ROOT, PYTHON, tripPaths, readJSON, readConfig, listTrips, listTripSlugs, SLUG_RE } from "../trips-lib.mjs";
 
 const PORT = Number(process.env.PORT) || 4321;
 const app = express();
 app.use(express.json({ limit: "16mb" }));
+const upload = multer({ dest: path.join(os.tmpdir(), "oab-uploads"), limits: { fileSize: 60 * 1024 * 1024 } });
 
 const DIST = path.join(ROOT, "dist");
 
@@ -29,6 +33,44 @@ const projectStats = (project) => {
   return { chosen, placed };
 };
 
+const dayIndexFactory = (cfg) => {
+  const startMs = Date.parse(cfg.startDate + "T00:00:00");
+  return (iso) => {
+    const ms = Date.parse((iso || "").slice(0, 10) + "T00:00:00");
+    if (Number.isNaN(ms)) return 1;
+    return Math.min(Math.max(Math.round((ms - startMs) / 86400000) + 1, 1), cfg.days);
+  };
+};
+
+// Merge the osxphotos-built manifest (if any) with uploaded photos into one manifest.
+function mergedManifest(tp, cfg) {
+  const base = readJSON(tp.manifest);
+  const uploads = readJSON(tp.uploadsJson) || [];
+  if (!base && !uploads.length) return null;
+  const startMs = Date.parse(cfg.startDate + "T00:00:00");
+  const photos = [...(base?.photos || []), ...uploads];
+  photos.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const days = Array.from({ length: cfg.days }, (_, i) => {
+    const date = new Date(startMs + i * 86400000).toISOString().slice(0, 10);
+    return { index: i + 1, date, label: `Day ${i + 1}`, count: photos.filter((p) => p.dayIndex === i + 1).length };
+  });
+  return { generatedAt: new Date().toISOString(), trip: { startDate: cfg.startDate, days: cfg.days }, days, photos };
+}
+
+// Run the Python uploader for one file; resolves to { width, height, date, meta } or null.
+function ingestUpload(src, thumb, web) {
+  return new Promise((resolve) => {
+    const c = spawn(PYTHON, [path.join(ROOT, "scripts", "ingest-upload.py"), src, thumb, web]);
+    let out = "";
+    c.stdout.on("data", (d) => (out += d));
+    c.on("close", (code) => {
+      if (code !== 0) return resolve(null);
+      try { resolve(JSON.parse(out)); } catch { resolve(null); }
+    });
+    c.on("error", () => resolve(null));
+  });
+}
+
 // middleware: validate :slug
 const withTrip = (req, res, next) => {
   if (!okSlug(req.params.slug)) return res.status(404).json({ error: "trip_not_found" });
@@ -44,7 +86,7 @@ app.get("/trips/:slug/thumbs/:file", withTrip, (req, res) => {
   res.status(404).end();
 });
 app.get("/trips/:slug/photo/:uuid", withTrip, (req, res) => {
-  const uuid = String(req.params.uuid).replace(/[^0-9A-Fa-f-]/g, "");
+  const uuid = String(req.params.uuid).replace(/[^0-9A-Za-z-]/g, "");
   const web = path.join(req.tp.web, `${uuid}.jpg`);
   const thumb = path.join(req.tp.thumbs, `${uuid}.jpg`);
   if (fs.existsSync(web)) return res.sendFile(web);
@@ -57,7 +99,7 @@ app.get("/api/trips", (_req, res) => {
   const trips = listTrips().map((t) => {
     const tp = tripPaths(t.slug);
     const project = readJSON(tp.project);
-    const hasPhotos = fs.existsSync(tp.manifest);
+    const hasPhotos = fs.existsSync(tp.manifest) || fs.existsSync(tp.uploadsJson);
     return { ...t, hasPhotos, ...projectStats(project) };
   });
   res.json(trips);
@@ -92,9 +134,50 @@ app.get("/api/trips/:slug/config", withTrip, (req, res) => res.json(req.cfg));
 
 // ---- per-trip manifest / project -----------------------------------------
 app.get("/api/trips/:slug/manifest", withTrip, (req, res) => {
-  const manifest = readJSON(req.tp.manifest);
+  const manifest = mergedManifest(req.tp, req.cfg);
   if (!manifest) return res.status(404).json({ error: "manifest_missing" });
   res.json(manifest);
+});
+
+// upload photos straight into the trip (no iCloud needed)
+app.post("/api/trips/:slug/upload", withTrip, upload.array("files", 300), async (req, res) => {
+  const files = req.files || [];
+  if (!files.length) return res.status(400).json({ error: "no_files" });
+  const dayIndex = Math.max(1, Math.min(req.cfg.days, Number(req.body.dayIndex) || 1));
+  const dayDate = new Date(Date.parse(req.cfg.startDate + "T00:00:00") + (dayIndex - 1) * 86400000).toISOString().slice(0, 10);
+
+  await fsp.mkdir(req.tp.uploads, { recursive: true });
+  await fsp.mkdir(req.tp.thumbs, { recursive: true });
+  await fsp.mkdir(req.tp.web, { recursive: true });
+  const uploads = readJSON(req.tp.uploadsJson) || [];
+  let added = 0, failed = 0;
+
+  for (const f of files) {
+    const uuid = "up-" + crypto.randomUUID();
+    const ext = (path.extname(f.originalname) || ".jpg").toLowerCase();
+    const orig = path.join(req.tp.uploads, uuid + ext);
+    try { await fsp.rename(f.path, orig); } catch { await fsp.copyFile(f.path, orig); await fsp.unlink(f.path).catch(() => {}); }
+
+    const info = await ingestUpload(orig, path.join(req.tp.thumbs, `${uuid}.jpg`), path.join(req.tp.web, `${uuid}.jpg`));
+    if (!info) { failed++; await fsp.unlink(orig).catch(() => {}); continue; }
+
+    uploads.push({
+      uuid,
+      filename: f.originalname,
+      date: info.date || `${dayDate}T12:00:00`,
+      dayIndex, // always land on the day the user is viewing
+      width: info.width || 0,
+      height: info.height || 0,
+      isFavorite: false,
+      hasThumb: true,
+      sig: uuid,
+      meta: info.meta || undefined,
+      source: "upload",
+    });
+    added++;
+  }
+  await fsp.writeFile(req.tp.uploadsJson, JSON.stringify(uploads, null, 2));
+  res.json({ ok: true, added, failed });
 });
 
 app.get("/api/trips/:slug/project", withTrip, async (req, res) => {
@@ -133,16 +216,29 @@ app.post("/api/trips/:slug/export/prepare", withTrip, async (req, res) => {
   const rel = `trips/${req.params.slug}`;
 
   await fsp.mkdir(req.tp.exportRaw, { recursive: true });
-  await fsp.writeFile(req.tp.exportUuids, uuids.join("\n") + "\n");
   await fsp.writeFile(req.tp.exportMap, JSON.stringify({ items, options }, null, 2));
 
-  // run from the project root
+  // uploaded photos aren't in iCloud — copy their originals straight into _raw,
+  // and only ask osxphotos to download the ones that came from Apple Photos.
+  const uploadRecs = readJSON(req.tp.uploadsJson) || [];
+  const uploadedSet = new Set(uploadRecs.map((r) => r.uuid));
+  const uploadFiles = fs.existsSync(req.tp.uploads) ? fs.readdirSync(req.tp.uploads) : [];
+  let copied = 0;
+  for (const u of uuids) {
+    if (!uploadedSet.has(u)) continue;
+    const f = uploadFiles.find((x) => x.startsWith(u + "."));
+    if (f) { await fsp.copyFile(path.join(req.tp.uploads, f), path.join(req.tp.exportRaw, f)); copied++; }
+  }
+  const osxUuids = uuids.filter((u) => !uploadedSet.has(u));
+  await fsp.writeFile(req.tp.exportUuids, osxUuids.join("\n") + "\n");
+
+  // run from the project root (skip if there are no Apple Photos to download)
   const command =
     `osxphotos export ${rel}/export/_raw ` +
     `--uuid-from-file ${rel}/export-uuids.txt --download-missing --use-photokit ` +
     `--convert-to-jpeg --jpeg-quality 0.92 --filename "{uuid}" ` +
     `--skip-live --skip-raw --retry 3 --report ${rel}/export-full-report.csv`;
-  res.json({ ok: true, count: uuids.length, command });
+  res.json({ ok: true, count: osxUuids.length, uploadsCopied: copied, command });
 });
 
 app.post("/api/trips/:slug/export/finish", withTrip, (req, res) => {

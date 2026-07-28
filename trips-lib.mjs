@@ -32,6 +32,8 @@ export function tripPaths(slug) {
     exportMap: path.join(dir, "export-map.json"),
     exportUuids: path.join(dir, "export-uuids.txt"),
     book: path.join(dir, "book"),
+    uploads: path.join(dir, "uploads"),       // original uploaded files
+    uploadsJson: path.join(dir, "uploads.json"), // records for uploaded photos
   };
 }
 

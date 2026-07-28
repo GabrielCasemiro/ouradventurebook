@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useApp } from "../App";
+import { api } from "../lib/api";
 import { thumbUrl } from "../lib/api";
 import type { Photo } from "../lib/types";
 import { Lightbox } from "../components/Lightbox";
@@ -16,10 +17,25 @@ export function Curadoria({
   activeDay: number;
   setActiveDay: (d: number) => void;
 }) {
-  const { slug, manifest, project, patchPhoto } = useApp();
+  const { slug, manifest, project, patchPhoto, reloadManifest } = useApp();
   const [onlyChosen, setOnlyChosen] = useState(false);
   const [hideDupes, setHideDupes] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = async (files: FileList | File[]) => {
+    const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (!list.length) return;
+    setUploading(true);
+    try {
+      await api.uploadPhotos(slug, list, activeDay);
+      await reloadManifest();
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const chosenByDay = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -88,7 +104,21 @@ export function Curadoria({
         </ul>
       </aside>
 
-      <section className="gallery">
+      <section
+        className={dragOver ? "gallery dragover" : "gallery"}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => { if (e.target.files) handleFiles(e.target.files); e.target.value = ""; }}
+        />
+        {dragOver && <div className="drop-overlay">Drop photos to add to Day {activeDay}</div>}
         <div className="gallery-head">
           <div>
             <h2>
@@ -99,6 +129,9 @@ export function Curadoria({
             </p>
           </div>
           <div className="toggles">
+            <button className="btn-upload" onClick={() => fileRef.current?.click()} disabled={uploading} title="Add photos from your computer to this day">
+              {uploading ? "Adding…" : "＋ Add photos"}
+            </button>
             <label className="toggle">
               <input type="checkbox" checked={onlyChosen} onChange={(e) => setOnlyChosen(e.target.checked)} />
               <span>Only chosen</span>

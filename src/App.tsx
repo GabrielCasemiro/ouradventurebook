@@ -17,6 +17,7 @@ interface AppState {
   chosenSorted: Photo[];
   patchPhoto: (uuid: string, patch: PhotoState) => void;
   setProject: (updater: (p: Project) => Project) => void;
+  reloadManifest: () => Promise<void>;
   saveStatus: SaveStatus;
 }
 
@@ -93,6 +94,8 @@ export function App({ slug }: { slug: string }) {
     setProject((p) => ({ ...p, photos: { ...p.photos, [uuid]: { ...p.photos[uuid], ...patch } } }));
   }, [setProject]);
 
+  const reloadManifest = useCallback(() => api.manifest(slug).then(setManifest).catch(() => {}), [slug]);
+
   const photosByUuid = useMemo(() => {
     const m = new Map<string, Photo>();
     manifest?.photos.forEach((ph) => m.set(ph.uuid, ph));
@@ -113,7 +116,7 @@ export function App({ slug }: { slug: string }) {
   const placed = countPlaced(project.album.sheets);
   const sheetsUsed = countSheetsUsed(project.album.sheets);
 
-  const state: AppState = { slug, config, manifest, project, photosByUuid, chosenSorted, patchPhoto, setProject, saveStatus };
+  const state: AppState = { slug, config, manifest, project, photosByUuid, chosenSorted, patchPhoto, setProject, reloadManifest, saveStatus };
 
   return (
     <Ctx.Provider value={state}>
