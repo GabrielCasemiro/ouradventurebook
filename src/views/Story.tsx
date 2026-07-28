@@ -83,7 +83,6 @@ export function Story({ slug }: { slug: string }) {
         {config.music && <Music videoId={config.music} />}
         <FloatingHeader emoji={config.emoji} days={daysPresent} activeDay={activeDay} onDay={goToDay} />
         <Cover config={config} cover={cover} dateRange={dateRange} stats={stats} />
-        {sections.map((sec) => <DaySectionView key={sec.dayIndex} section={sec} onActive={setActiveDay} />)}
         {mapPoints.length > 0 && (
           <section className="story-mapsection">
             <div className="story-maphead">
@@ -93,6 +92,7 @@ export function Story({ slug }: { slug: string }) {
             <TripMap slug={slug} points={mapPoints} />
           </section>
         )}
+        {sections.map((sec) => <DaySectionView key={sec.dayIndex} section={sec} onActive={setActiveDay} />)}
         <footer className="story-end">
           <div className="splash-star">✦</div>
           <h2>{stats.dias} unforgettable days.</h2>
