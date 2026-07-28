@@ -3,6 +3,7 @@ import { api, photoUrl } from "../lib/api";
 import type { Manifest, Project, Photo, TripConfig } from "../lib/types";
 import { iterateSlots, getSlot } from "../lib/album";
 import { Music } from "./Music";
+import { TripMap, type MapPoint } from "./TripMap";
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 export const fmtLong = (iso: string) => {
@@ -56,13 +57,16 @@ export function Story({ slug }: { slug: string }) {
       ordered.find((i) => i.photo.isFavorite && i.photo.width > i.photo.height)?.photo ||
       ordered.find((i) => i.photo.width > i.photo.height)?.photo || ordered[0]?.photo || null;
     const stats = { dias: sections.length, fotos: ordered.length, legendas: ordered.filter((i) => i.caption.trim()).length };
-    return { sections, daysPresent, cover, stats };
+    const mapPoints: MapPoint[] = ordered
+      .filter((i) => i.photo.meta?.lat != null && i.photo.meta?.lng != null)
+      .map((i) => ({ lat: i.photo.meta!.lat!, lng: i.photo.meta!.lng!, uuid: i.uuid, caption: i.caption, dayIndex: i.dayIndex }));
+    return { sections, daysPresent, cover, stats, mapPoints };
   }, [manifest, project]);
 
   if (err) return <div className="story-loading">{err}</div>;
   if (!config || !manifest || !project || !data) return <div className="story-loading"><span className="splash-star">✦</span></div>;
 
-  const { sections, daysPresent, cover, stats } = data;
+  const { sections, daysPresent, cover, stats, mapPoints } = data;
   const start = manifest.trip.startDate;
   const lastDate = sections.length ? sections[sections.length - 1].date : manifest.days[manifest.days.length - 1].date;
   const dateRange = `${fmtLong(start)} — ${fmtLong(lastDate)}, ${start.slice(0, 4)}`;
@@ -80,6 +84,15 @@ export function Story({ slug }: { slug: string }) {
         <FloatingHeader emoji={config.emoji} days={daysPresent} activeDay={activeDay} onDay={goToDay} />
         <Cover config={config} cover={cover} dateRange={dateRange} stats={stats} />
         {sections.map((sec) => <DaySectionView key={sec.dayIndex} section={sec} onActive={setActiveDay} />)}
+        {mapPoints.length > 0 && (
+          <section className="story-mapsection">
+            <div className="story-maphead">
+              <div className="story-kicker">everywhere we went</div>
+              <h2 className="story-maptitle">{mapPoints.length} moments on the map</h2>
+            </div>
+            <TripMap slug={slug} points={mapPoints} />
+          </section>
+        )}
         <footer className="story-end">
           <div className="splash-star">✦</div>
           <h2>{stats.dias} unforgettable days.</h2>
