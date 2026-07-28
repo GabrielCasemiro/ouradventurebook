@@ -18,7 +18,11 @@ never leave your machine.
 
 ![Album view](docs/album.png)
 
-> Photos in the screenshots are blurred for privacy; the app itself shows them sharp.
+**Digital album** — a shareable web story with every geotagged photo on an interactive map.
+
+![Trip map](docs/map.png)
+
+> Photos in the Curate/Album screenshots are blurred for privacy; the app itself shows them sharp.
 
 ## Features
 
