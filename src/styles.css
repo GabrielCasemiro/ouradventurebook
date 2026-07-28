@@ -353,7 +353,14 @@ textarea { font-family: inherit; }
 .tray-head { color: var(--gold-soft); font-size: 13px; font-weight: 600; margin-bottom: 8px; }
 .tray-drop-hint { color: #ffc3bd; }
 .tray-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-.tray-thumb { flex: none; width: 96px; height: 64px; border-radius: 7px; overflow: hidden; cursor: grab; box-shadow: var(--shadow-md); border: 2px solid transparent; }
+.tray-thumb { position: relative; flex: none; width: 96px; height: 64px; border-radius: 7px; overflow: hidden; cursor: grab; box-shadow: var(--shadow-md); border: 2px solid transparent; }
+.tray-remove {
+  position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; border: 0;
+  background: rgba(12, 20, 50, 0.72); color: #fff; font-size: 10px; line-height: 1; display: grid; place-items: center;
+  opacity: 0; cursor: pointer; transition: opacity 0.15s, background 0.15s;
+}
+.tray-thumb:hover .tray-remove { opacity: 1; }
+.tray-remove:hover { background: var(--danger); }
 .tray-thumb:hover { border-color: var(--gold); }
 .tray-thumb img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 

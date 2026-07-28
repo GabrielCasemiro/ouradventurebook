@@ -10,6 +10,7 @@ export function Album({ goCuradoria }: { goCuradoria: () => void }) {
   const { slug, project, chosenSorted, setProject, photosByUuid, patchPhoto } = useApp();
   const sheets = project.album.sheets;
   const [drag, setDrag] = useState<DragData | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
   const placedSet = useMemo(() => {
     const s = new Set<string>();
@@ -146,8 +147,34 @@ export function Album({ goCuradoria }: { goCuradoria: () => void }) {
                 title={`Day ${p.dayIndex}`}
               >
                 <img src={thumbUrl(slug, p.uuid)} loading="lazy" alt="" draggable={false} />
+                <button
+                  className="tray-remove"
+                  onClick={(e) => { e.stopPropagation(); setConfirmRemove(p.uuid); }}
+                  title="Remove from chosen"
+                  aria-label="Remove from chosen"
+                >
+                  ✕
+                </button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {confirmRemove && (
+        <div className="modal-overlay" onClick={() => setConfirmRemove(null)}>
+          <div className="modal sm" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setConfirmRemove(null)}>✕</button>
+            <h2>Remove from chosen?</h2>
+            <p className="muted">
+              It leaves the tray (un-chosen). The photo stays in your library and can be chosen again anytime.
+            </p>
+            <div className="dupe-actions">
+              <button className="btn-danger" onClick={() => { patchPhoto(confirmRemove, { chosen: false }); setConfirmRemove(null); }}>
+                Remove
+              </button>
+              <button className="btn-ghost dark" onClick={() => setConfirmRemove(null)}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
