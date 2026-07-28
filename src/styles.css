@@ -524,6 +524,15 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 .story-maphead { text-align: center; margin-bottom: 26px; }
 .story-maphead .story-kicker { margin-bottom: 12px; }
 .story-maptitle { font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 4vw, 44px); color: #fff; margin: 0; }
+.daymark-wrap { background: none; border: 0; }
+.daymark {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  color: #fff; font-family: var(--font-body); font-weight: 700; font-size: 12px;
+  border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+.tripmap-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center; margin-bottom: 16px; }
+.tripmap-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #cdd8ff; font-weight: 600; }
+.tripmap-legend-item .dot { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.5); }
 .tripmap { width: 100%; height: 62vh; min-height: 380px; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-lg); border: 1px solid rgba(244, 212, 136, 0.25); }
 .tripmap-popup .leaflet-popup-content-wrapper { border-radius: 10px; }
 .tripmap-popup .leaflet-popup-content { margin: 10px; }

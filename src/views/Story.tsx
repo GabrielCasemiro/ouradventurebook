@@ -89,7 +89,7 @@ export function Story({ slug }: { slug: string }) {
               <div className="story-kicker">everywhere we went</div>
               <h2 className="story-maptitle">{mapPoints.length} moments on the map</h2>
             </div>
-            <TripMap slug={slug} points={mapPoints} />
+            <TripMap slug={slug} points={mapPoints} days={config.days} />
           </section>
         )}
         {sections.map((sec) => <DaySectionView key={sec.dayIndex} section={sec} onActive={setActiveDay} />)}
