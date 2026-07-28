@@ -11,6 +11,22 @@ export function Album({ goCuradoria }: { goCuradoria: () => void }) {
   const sheets = project.album.sheets;
   const [drag, setDrag] = useState<DragData | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{ index: number; count: number } | null>(null);
+
+  const addSheet = () =>
+    setProject((p) => ({ ...p, album: { sheets: [...p.album.sheets, { front: [null, null], back: [null, null] }] } }));
+
+  const doRemoveSheet = (i: number) => {
+    setConfirmSheet(null);
+    setProject((p) => ({ ...p, album: { sheets: p.album.sheets.filter((_, idx) => idx !== i) } }));
+  };
+
+  const removeSheet = (i: number) => {
+    const s = sheets[i];
+    const count = [...s.front, ...s.back].filter(Boolean).length;
+    if (count > 0) setConfirmSheet({ index: i, count });
+    else doRemoveSheet(i);
+  };
 
   const placedSet = useMemo(() => {
     const s = new Set<string>();
@@ -92,6 +108,9 @@ export function Album({ goCuradoria }: { goCuradoria: () => void }) {
               + Add {tray.length} new to the end
             </button>
           )}
+          <button className="btn-ghost" onClick={addSheet} title="Add an empty sheet at the end">
+            ＋ Add sheet
+          </button>
         </div>
         {chosenSorted.length === 0 && (
           <p className="album-hint">
@@ -104,6 +123,16 @@ export function Album({ goCuradoria }: { goCuradoria: () => void }) {
         {sheets.map((sheet, i) => (
           <div className="sheet" key={i} id={`sheet-${i}`}>
             <div className="sheet-tab">Sheet {String(i + 1).padStart(2, "0")}</div>
+            {sheets.length > 1 && (
+              <button
+                className="sheet-remove"
+                onClick={() => removeSheet(i)}
+                title="Remove this sheet"
+                aria-label={`Remove sheet ${i + 1}`}
+              >
+                ✕
+              </button>
+            )}
             <div className="sheet-body">
               <SideView
                 sheetIndex={i}
@@ -157,6 +186,22 @@ export function Album({ goCuradoria }: { goCuradoria: () => void }) {
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {confirmSheet && (
+        <div className="modal-overlay" onClick={() => setConfirmSheet(null)}>
+          <div className="modal sm" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setConfirmSheet(null)}>✕</button>
+            <h2>Remove Sheet {String(confirmSheet.index + 1).padStart(2, "0")}?</h2>
+            <p className="warn-line">
+              ⚠ This sheet has {confirmSheet.count} photo{confirmSheet.count > 1 ? "s" : ""}. They go back to the tray (still chosen) — nothing is deleted.
+            </p>
+            <div className="dupe-actions">
+              <button className="btn-danger" onClick={() => doRemoveSheet(confirmSheet.index)}>Remove sheet</button>
+              <button className="btn-ghost dark" onClick={() => setConfirmSheet(null)}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
