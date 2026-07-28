@@ -29,8 +29,8 @@ fi
 bold "Setting up Python (isolated venv) + Pillow…"
 python3 -m venv .venv
 ./.venv/bin/python -m pip install --quiet --upgrade pip
-./.venv/bin/python -m pip install --quiet Pillow
-ok "Pillow ready in ./.venv"
+./.venv/bin/python -m pip install --quiet Pillow pillow-heif
+ok "Pillow (+ HEIC support) ready in ./.venv"
 
 # --- osxphotos (needed to import photos from Apple Photos) ---
 bold "Checking osxphotos…"

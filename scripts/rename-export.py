@@ -8,6 +8,12 @@ import os
 import sys
 from PIL import Image, ImageOps
 
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except Exception:
+    pass
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if len(sys.argv) < 2:
     print("✖ usage: rename-export.py <slug>", file=sys.stderr)

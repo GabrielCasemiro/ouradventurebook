@@ -28,6 +28,8 @@ never leave your machine.
 
 - **Multi‑trip** — one self‑contained folder per trip (`trips/<slug>/`).
 - **Day‑by‑day curation** straight from your Apple Photos library, grouped by day.
+- **Add photos from anywhere** — drag & drop or pick files (JPG/PNG/HEIC) right in the
+  Curate tab. Uploaded photos behave exactly like imported ones; iCloud is optional.
 - **Physical‑album layout** — front/back sheets with 2 horizontal photos + a caption
   column per side, chronological auto‑fill, drag to reorder.
 - **Print export** — high‑res of *only* the photos you chose, vertical photos matted
