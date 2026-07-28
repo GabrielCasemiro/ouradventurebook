@@ -196,6 +196,36 @@ app.post("/api/trips/:slug/upload", withTrip, upload.array("files", 300), async 
   res.json({ ok: true, added, replaced, failed, dayIndex });
 });
 
+// delete a photo from the catalog (removes its record and image files)
+app.delete("/api/trips/:slug/photo/:uuid", withTrip, async (req, res) => {
+  const uuid = String(req.params.uuid).replace(/[^0-9A-Za-z-]/g, "");
+  if (!uuid) return res.status(400).json({ error: "bad_uuid" });
+
+  // drop from the osxphotos manifest if present
+  const base = readJSON(req.tp.manifest);
+  if (base?.photos) {
+    const kept = base.photos.filter((p) => p.uuid !== uuid);
+    if (kept.length !== base.photos.length) {
+      base.photos = kept;
+      await fsp.writeFile(req.tp.manifest, JSON.stringify(base));
+    }
+  }
+  // drop from uploads + delete the original file(s)
+  const uploads = readJSON(req.tp.uploadsJson);
+  if (Array.isArray(uploads) && uploads.some((r) => r.uuid === uuid)) {
+    await fsp.writeFile(req.tp.uploadsJson, JSON.stringify(uploads.filter((r) => r.uuid !== uuid), null, 2));
+    if (fs.existsSync(req.tp.uploads)) {
+      for (const f of fs.readdirSync(req.tp.uploads)) {
+        if (f.startsWith(uuid + ".")) await fsp.unlink(path.join(req.tp.uploads, f)).catch(() => {});
+      }
+    }
+  }
+  // delete generated images
+  await fsp.unlink(path.join(req.tp.thumbs, `${uuid}.jpg`)).catch(() => {});
+  await fsp.unlink(path.join(req.tp.web, `${uuid}.jpg`)).catch(() => {});
+  res.json({ ok: true });
+});
+
 app.get("/api/trips/:slug/project", withTrip, async (req, res) => {
   let project = readJSON(req.tp.project);
   if (!project) {

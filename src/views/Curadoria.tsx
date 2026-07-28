@@ -17,7 +17,7 @@ export function Curadoria({
   activeDay: number;
   setActiveDay: (d: number) => void;
 }) {
-  const { slug, config, manifest, project, patchPhoto, reloadManifest } = useApp();
+  const { slug, config, manifest, project, patchPhoto, reloadManifest, setProject } = useApp();
   const [onlyChosen, setOnlyChosen] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [hideDupes, setHideDupes] = useState(false);
@@ -26,6 +26,7 @@ export function Curadoria({
   const [dragOver, setDragOver] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [dupe, setDupe] = useState<{ files: File[]; count: number } | null>(null);
+  const [pendingDel, setPendingDel] = useState<{ uuid: string; filename: string; sheet: number | null } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const uploadedNames = useMemo(
@@ -100,6 +101,44 @@ export function Curadoria({
   }, [manifest, activeDay]);
 
   const activeDayInfo = manifest.days.find((d) => d.index === activeDay);
+
+  // which album sheet (if any) each photo is placed on
+  const placedAt = useMemo(() => {
+    const map = new Map<string, number>();
+    project.album.sheets.forEach((s, i) => {
+      [...s.front, ...s.back].forEach((u) => { if (u && !map.has(u)) map.set(u, i + 1); });
+    });
+    return map;
+  }, [project]);
+
+  const requestDelete = (uuid: string) => {
+    const ph = manifest.photos.find((p) => p.uuid === uuid);
+    setPendingDel({ uuid, filename: ph?.filename || "", sheet: placedAt.get(uuid) ?? null });
+  };
+
+  const doDelete = async () => {
+    if (!pendingDel) return;
+    const { uuid } = pendingDel;
+    setPendingDel(null);
+    try {
+      await api.deletePhoto(slug, uuid);
+      setProject((p) => {
+        const photos = { ...p.photos };
+        delete photos[uuid];
+        const sheets = p.album.sheets.map((s) => ({
+          front: s.front.map((u) => (u === uuid ? null : u)),
+          back: s.back.map((u) => (u === uuid ? null : u)),
+        }));
+        return { ...p, photos, album: { sheets } };
+      });
+      await reloadManifest();
+      setToast("🗑 Photo deleted");
+    } catch {
+      setToast("Delete failed");
+    } finally {
+      window.setTimeout(() => setToast(null), 4000);
+    }
+  };
 
   return (
     <div className="curadoria">
@@ -183,6 +222,7 @@ export function Curadoria({
                 onToggle={() => patchPhoto(p.uuid, { chosen: !project.photos[p.uuid]?.chosen })}
                 onCaption={(v) => patchPhoto(p.uuid, { caption: v })}
                 onOpen={() => setLightbox(p.uuid)}
+                onDelete={() => requestDelete(p.uuid)}
               />
             ))}
           </div>
@@ -190,6 +230,27 @@ export function Curadoria({
       </section>
 
       {lightbox && <Lightbox uuid={lightbox} onClose={() => setLightbox(null)} onNav={setLightbox} photos={dayPhotos} />}
+
+      {pendingDel && (
+        <div className="modal-overlay" onClick={() => setPendingDel(null)}>
+          <div className="modal sm" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setPendingDel(null)}>✕</button>
+            <h2>Delete this photo?</h2>
+            {pendingDel.sheet != null ? (
+              <p className="warn-line">
+                ⚠ It's placed in the album on <b>Sheet {String(pendingDel.sheet).padStart(2, "0")}</b>. Deleting it will
+                remove it from the album too.
+              </p>
+            ) : (
+              <p className="muted">This removes it from the catalog{pendingDel.filename ? ` (${pendingDel.filename})` : ""}. This can't be undone.</p>
+            )}
+            <div className="dupe-actions">
+              <button className="btn-danger" onClick={doDelete}>Delete</button>
+              <button className="btn-ghost dark" onClick={() => setPendingDel(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && <div className="upload-toast">{toast}</div>}
 
@@ -238,6 +299,7 @@ function PhotoCard({
   onToggle,
   onCaption,
   onOpen,
+  onDelete,
 }: {
   slug: string;
   photo: Photo;
@@ -246,6 +308,7 @@ function PhotoCard({
   onToggle: () => void;
   onCaption: (v: string) => void;
   onOpen: () => void;
+  onDelete: () => void;
 }) {
   return (
     <figure className={chosen ? "card chosen" : "card"}>
@@ -255,6 +318,17 @@ function PhotoCard({
         ) : (
           <div className="no-thumb">no thumbnail</div>
         )}
+        <button
+          className="del"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          title="Delete photo"
+          aria-label="Delete photo"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M9 3h6l1 2h4v2H4V5h4l1-2z" />
+            <path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z" />
+          </svg>
+        </button>
         <button
           className={chosen ? "pick on" : "pick"}
           onClick={(e) => {

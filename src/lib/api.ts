@@ -33,6 +33,8 @@ export const api = {
     fd.append("mode", mode);
     return fetch(`${base(slug)}/upload`, { method: "POST", body: fd }).then(j);
   },
+  deletePhoto: (slug: string, uuid: string): Promise<{ ok: boolean }> =>
+    fetch(`${base(slug)}/photo/${encodeURIComponent(uuid)}`, { method: "DELETE" }).then(j),
 };
 
 export const thumbUrl = (slug: string, uuid: string) => `/trips/${slug}/thumbs/${uuid}.jpg`;
