@@ -59,15 +59,12 @@ export function App({ slug }: { slug: string }) {
       });
   }, [slug]);
 
-  // ensure the number of sheets matches the config (only adds; never removes)
+  // ensure at least one sheet exists (the album is the source of truth for the count;
+  // add/remove sheets from the Album view)
   useEffect(() => {
     if (!config || !project) return;
-    if (project.album.sheets.length < config.sheets) {
-      setProjectState((prev) => {
-        if (!prev) return prev;
-        const sheets = [...prev.album.sheets, ...emptySheets(config.sheets - prev.album.sheets.length)];
-        return { ...prev, album: { sheets } };
-      });
+    if (project.album.sheets.length === 0) {
+      setProjectState((prev) => (prev ? { ...prev, album: { sheets: emptySheets(1) } } : prev));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, project?.album.sheets.length]);
