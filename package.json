@@ -1,0 +1,35 @@
+{
+  "name": "our-adventure-book",
+  "description": "Turn a trip's photos into a real album — curate, print, and share a digital story. Runs locally against Apple Photos.",
+  "license": "MIT",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "setup": "bash scripts/setup.sh",
+    "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "node server/index.mjs",
+    "dev:web": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "thumbs": "node scripts/make-thumbs.mjs",
+    "web": "node scripts/make-web.mjs",
+    "manifest": "node scripts/build-manifest.mjs",
+    "rename-export": "python3 scripts/rename-export.py",
+    "book": "node scripts/build-book.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "playwright": "^1.62.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}

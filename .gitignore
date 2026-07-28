@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# Personal trip data — photos, captions, configs, exports, generated assets.
+# NEVER committed. Everything you create lives here and stays on your machine.
+/trips/*
+!/trips/.gitkeep
+
+# legacy single-trip dir (recreated by an old server instance)
+/data/
+
+# python virtualenv (created by npm run setup)
+/.venv/
