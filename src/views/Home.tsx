@@ -16,32 +16,70 @@ export function Home() {
 
   useEffect(() => { api.trips().then(setTrips).catch((e) => setErr(String(e.message || e))); }, []);
 
+  const groups = useMemo(() => {
+    if (!trips) return null;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayMs = today.getTime();
+    const withDates = trips.map((t) => {
+      const startMs = Date.parse(t.startDate + "T00:00:00");
+      return { trip: t, startMs, endMs: startMs + (t.days - 1) * 86400000, year: t.startDate.slice(0, 4) };
+    });
+    const upcoming = withDates.filter((t) => t.endMs >= todayMs).sort((a, b) => a.startMs - b.startMs);
+    const past = withDates.filter((t) => t.endMs < todayMs).sort((a, b) => b.startMs - a.startMs);
+    const years = [...new Set(past.map((t) => t.year))].sort().reverse();
+    return { upcoming, past, years, todayMs };
+  }, [trips]);
+
   return (
     <div className="home">
       <header className="home-head">
         <div className="home-brand"><span className="home-star">✦</span> OurAdventureBook</div>
         <p className="home-sub">Every trip, its own story — from prints to a photobook.</p>
+        <button className="btn-gold home-new" onClick={() => setShowNew(true)}>＋ New trip</button>
       </header>
 
       {err && <p className="err-msg" style={{ textAlign: "center" }}>{err}</p>}
 
-      <div className="trip-grid">
-        {trips?.map((t) => <TripCard key={t.slug} trip={t} />)}
-        <button className="trip-card new" onClick={() => setShowNew(true)}>
+      {groups && trips!.length === 0 && (
+        <button className="trip-card new solo" onClick={() => setShowNew(true)}>
           <span className="trip-new-plus">＋</span>
-          <span>New trip</span>
+          <span>Create your first trip</span>
         </button>
-      </div>
+      )}
+
+      {groups && groups.upcoming.length > 0 && (
+        <section className="home-section">
+          <h2 className="home-section-title">Upcoming</h2>
+          <div className="trip-grid">
+            {groups.upcoming.map((t) => <TripCard key={t.trip.slug} trip={t.trip} startMs={t.startMs} todayMs={groups.todayMs} />)}
+          </div>
+        </section>
+      )}
+
+      {groups && groups.years.map((year) => (
+        <section className="home-section" key={year}>
+          <h2 className="home-section-title">{year}</h2>
+          <div className="trip-grid">
+            {groups.past.filter((t) => t.year === year).map((t) => <TripCard key={t.trip.slug} trip={t.trip} />)}
+          </div>
+        </section>
+      ))}
 
       {showNew && <NewTrip onClose={() => setShowNew(false)} />}
     </div>
   );
 }
 
-function TripCard({ trip }: { trip: TripSummary }) {
+function TripCard({ trip, startMs, todayMs }: { trip: TripSummary; startMs?: number; todayMs?: number }) {
   const range = `${fmt(trip.startDate)} — ${fmt(new Date(Date.parse(trip.startDate) + (trip.days - 1) * 86400000).toISOString().slice(0, 10))}`;
+  let upcomingNote: string | null = null;
+  if (startMs != null && todayMs != null) {
+    const days = Math.round((startMs - todayMs) / 86400000);
+    upcomingNote = days > 0 ? `in ${days} day${days > 1 ? "s" : ""}` : "happening now";
+  }
   return (
     <a className="trip-card" href={`/trip/${trip.slug}`}>
+      {upcomingNote && <span className="trip-soon">{upcomingNote}</span>}
       <div className="trip-emoji">{trip.emoji || "✦"}</div>
       <div className="trip-title">{trip.title}</div>
       {trip.kicker && <div className="trip-kicker">{trip.kicker}</div>}
