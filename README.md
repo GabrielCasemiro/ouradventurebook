@@ -8,6 +8,18 @@ Everything runs **locally** and reads directly from your **Apple Photos** librar
 (via [osxphotos](https://github.com/RhetTbull/osxphotos)). Your photos and captions
 never leave your machine.
 
+## Screenshots
+
+**Curate** — pick the best photos day by day, straight from your Apple Photos library.
+
+![Curate view](docs/curate.png)
+
+**Album** — lay out the physical album (2 photos + a caption column per side), sheet by sheet.
+
+![Album view](docs/album.png)
+
+> Photos in the screenshots are blurred for privacy; the app itself shows them sharp.
+
 ## Features
 
 - **Multi‑trip** — one self‑contained folder per trip (`trips/<slug>/`).
