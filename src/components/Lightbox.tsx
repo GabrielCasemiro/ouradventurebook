@@ -29,25 +29,39 @@ function Details({ photo }: { photo: Photo }) {
   if (exp) rows.push(["Exposure", exp]);
   if (m.filesize) rows.push(["File", fmtSize(m.filesize)!]);
 
+  const hasGeo = m.lat != null && m.lng != null;
+  const d = 0.008;
+  const bbox = hasGeo ? `${m.lng! - d},${m.lat! - d},${m.lng! + d},${m.lat! + d}` : "";
+
   return (
-    <dl className="lb-details">
-      {rows.map(([k, v]) => (
-        <div key={k}>
-          <dt>{k}</dt>
-          <dd>{v}</dd>
-        </div>
-      ))}
-      {m.lat != null && m.lng != null && (
-        <div>
-          <dt>Location</dt>
-          <dd>
-            <a href={`https://maps.google.com/?q=${m.lat},${m.lng}`} target="_blank" rel="noreferrer">
-              📍 {m.lat.toFixed(4)}, {m.lng.toFixed(4)}
-            </a>
-          </dd>
-        </div>
+    <>
+      <dl className="lb-details">
+        {rows.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+        {hasGeo && (
+          <div>
+            <dt>Location</dt>
+            <dd>
+              <a href={`https://www.openstreetmap.org/?mlat=${m.lat}&mlon=${m.lng}#map=15/${m.lat}/${m.lng}`} target="_blank" rel="noreferrer">
+                📍 {m.lat!.toFixed(4)}, {m.lng!.toFixed(4)}
+              </a>
+            </dd>
+          </div>
+        )}
+      </dl>
+      {hasGeo && (
+        <iframe
+          className="lb-map"
+          title="Location map"
+          loading="lazy"
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${m.lat},${m.lng}`}
+        />
       )}
-    </dl>
+    </>
   );
 }
 
