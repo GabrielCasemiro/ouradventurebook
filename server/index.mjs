@@ -289,9 +289,9 @@ app.post("/api/trips/:slug/export/prepare", withTrip, async (req, res) => {
   const osxUuids = uuids.filter((u) => !uploadedSet.has(u));
   await fsp.writeFile(req.tp.exportUuids, osxUuids.join("\n") + "\n");
 
-  // run from the project root (skip if there are no Apple Photos to download)
+  // paths are relative to the project root, so cd there first (copy-paste safe from anywhere)
   const command =
-    `osxphotos export ${rel}/export/_raw ` +
+    `cd ${ROOT} && osxphotos export ${rel}/export/_raw ` +
     `--uuid-from-file ${rel}/export-uuids.txt --download-missing --use-photokit ` +
     `--convert-to-jpeg --jpeg-quality 0.92 --filename "{uuid}" ` +
     `--skip-live --skip-raw --retry 3 --report ${rel}/export-full-report.csv`;
