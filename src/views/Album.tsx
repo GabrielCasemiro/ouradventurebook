@@ -108,9 +108,6 @@ export function Album({ goCuradoria }: { goCuradoria: () => void }) {
               + Add {tray.length} new to the end
             </button>
           )}
-          <button className="btn-ghost" onClick={addSheet} title="Add an empty sheet at the end">
-            ＋ Add sheet
-          </button>
         </div>
         {chosenSorted.length === 0 && (
           <p className="album-hint">
@@ -153,6 +150,10 @@ export function Album({ goCuradoria }: { goCuradoria: () => void }) {
             </div>
           </div>
         ))}
+        <button className="sheet-add" onClick={addSheet} title="Add an empty sheet at the end">
+          <span className="sheet-add-plus">＋</span>
+          <span>Add sheet</span>
+        </button>
       </div>
 
       {chosenSorted.length > 0 && (
