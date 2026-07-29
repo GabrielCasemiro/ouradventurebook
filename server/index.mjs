@@ -47,7 +47,13 @@ function mergedManifest(tp, cfg) {
   const base = readJSON(tp.manifest);
   const uploads = readJSON(tp.uploadsJson) || [];
   const startMs = Date.parse(cfg.startDate + "T00:00:00");
-  const photos = [...(base?.photos || []), ...uploads];
+  // which photos have a high-res (HD) web render already generated
+  const webSet = new Set(
+    (fs.existsSync(tp.web) ? fs.readdirSync(tp.web) : [])
+      .filter((f) => f.endsWith(".jpg"))
+      .map((f) => f.slice(0, -4))
+  );
+  const photos = [...(base?.photos || []), ...uploads].map((p) => ({ ...p, hd: webSet.has(p.uuid) }));
   photos.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const days = Array.from({ length: cfg.days }, (_, i) => {
     const date = new Date(startMs + i * 86400000).toISOString().slice(0, 10);
@@ -287,15 +293,32 @@ app.post("/api/trips/:slug/export/prepare", withTrip, async (req, res) => {
   res.json({ ok: true, count: osxUuids.length, uploadsCopied: copied, command });
 });
 
-app.post("/api/trips/:slug/export/finish", withTrip, (req, res) => {
-  const child = spawn(PYTHON, [path.join(ROOT, "scripts", "rename-export.py"), req.params.slug], { cwd: ROOT });
-  let out = "", err = "";
-  child.stdout.on("data", (d) => (out += d));
-  child.stderr.on("data", (d) => (err += d));
-  child.on("close", (code) => {
-    if (code === 0) res.json({ ok: true, log: out });
-    else res.status(500).json({ error: "rename_failed", code, log: out, stderr: err });
+// run a child process to completion → { code, out, err }
+function runScript(cmd, args) {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { cwd: ROOT });
+    let out = "", err = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (err += d));
+    child.on("close", (code) => resolve({ code, out, err }));
+    child.on("error", (e) => resolve({ code: -1, out, err: err + String(e) }));
   });
+}
+
+app.post("/api/trips/:slug/export/finish", withTrip, async (req, res) => {
+  // 1) name the high-res files for the physical album (print)
+  const rename = await runScript(PYTHON, [path.join(ROOT, "scripts", "rename-export.py"), req.params.slug]);
+  if (rename.code !== 0)
+    return res.status(500).json({ error: "rename_failed", code: rename.code, log: rename.out, stderr: rename.err });
+
+  // 2) refresh the digital album's HD renders from the just-downloaded originals
+  const web = await runScript(process.execPath, [path.join(ROOT, "scripts", "make-web.mjs"), req.params.slug]);
+  let log = rename.out;
+  log += "\n" + (web.code === 0
+    ? web.out
+    : "⚠ Print files are ready, but generating the digital-album HD images failed:\n" + (web.err || web.out));
+
+  res.json({ ok: true, log });
 });
 
 // ---- frontend (production) -----------------------------------------------

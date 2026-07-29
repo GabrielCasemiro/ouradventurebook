@@ -24,6 +24,7 @@ export function Story({ slug }: { slug: string }) {
   const [project, setProject] = useState<Project | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [activeDay, setActiveDay] = useState(1);
+  const [hdDismissed, setHdDismissed] = useState(false);
 
   useEffect(() => {
     api.config(slug).then(setConfig).catch((e) => setErr(String(e.message || e)));
@@ -57,16 +58,17 @@ export function Story({ slug }: { slug: string }) {
       ordered.find((i) => i.photo.isFavorite && i.photo.width > i.photo.height)?.photo ||
       ordered.find((i) => i.photo.width > i.photo.height)?.photo || ordered[0]?.photo || null;
     const stats = { dias: sections.length, fotos: ordered.length, legendas: ordered.filter((i) => i.caption.trim()).length };
+    const missingHd = ordered.filter((i) => !i.photo.hd).length;
     const mapPoints: MapPoint[] = ordered
       .filter((i) => i.photo.meta?.lat != null && i.photo.meta?.lng != null)
       .map((i) => ({ lat: i.photo.meta!.lat!, lng: i.photo.meta!.lng!, uuid: i.uuid, caption: i.caption, dayIndex: i.dayIndex }));
-    return { sections, daysPresent, cover, stats, mapPoints };
+    return { sections, daysPresent, cover, stats, mapPoints, missingHd };
   }, [manifest, project]);
 
   if (err) return <div className="story-loading">{err}</div>;
   if (!config || !manifest || !project || !data) return <div className="story-loading"><span className="splash-star">✦</span></div>;
 
-  const { sections, daysPresent, cover, stats, mapPoints } = data;
+  const { sections, daysPresent, cover, stats, mapPoints, missingHd } = data;
   const start = manifest.trip.startDate;
   const lastDate = sections.length ? sections[sections.length - 1].date : manifest.days[manifest.days.length - 1].date;
   const dateRange = `${fmtLong(start)} — ${fmtLong(lastDate)}, ${start.slice(0, 4)}`;
@@ -82,6 +84,16 @@ export function Story({ slug }: { slug: string }) {
         <Sparkles />
         {config.music && <Music videoId={config.music} />}
         <FloatingHeader emoji={config.emoji} days={daysPresent} activeDay={activeDay} onDay={goToDay} />
+        {missingHd > 0 && !hdDismissed && (
+          <div className="hd-notice" role="status">
+            <span className="hd-notice-dot" aria-hidden="true">✦</span>
+            <span className="hd-notice-text">
+              Showing low-res previews — {missingHd} photo{missingHd > 1 ? "s aren’t" : " isn’t"} in high resolution yet.
+              Open the <a href={`/trip/${slug}`}>editor</a>, run <strong>Export</strong> and click <strong>“I ran it — finish”</strong> to bring in the HD versions.
+            </span>
+            <button className="hd-notice-x" onClick={() => setHdDismissed(true)} aria-label="Dismiss">✕</button>
+          </div>
+        )}
         <Cover config={config} cover={cover} dateRange={dateRange} stats={stats} />
         {mapPoints.length > 0 && (
           <section className="story-mapsection">
