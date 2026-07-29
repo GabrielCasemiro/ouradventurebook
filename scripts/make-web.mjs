@@ -67,6 +67,10 @@ async function main() {
   // preview can be upgraded to the true original once it's been downloaded.
   const sidecar = path.join(tp.web, ".sources.json");
   const sources = readJSON(sidecar) || {};
+  // live progress for the UI (polled by the server); removed when done
+  const progressFile = path.join(tp.web, ".progress.json");
+  const writeProgress = (done) => { try { fs.writeFileSync(progressFile, JSON.stringify({ done, total: list.length })); } catch {} };
+  writeProgress(0);
   console.log(`• [${slug}] Preparing web images @${MAX_DIM}px for ${list.length} photos…`);
   let done = 0, ori = 0, prev = 0, fail = 0, upgraded = 0, kept = 0;
   await pool(list, async (uuid) => {
@@ -74,16 +78,18 @@ async function main() {
     const exists = fs.existsSync(dest);
     const hasOriginal = !!rawSource(uuid);
     // keep what we have if it's already the original, or if nothing better exists locally yet
-    if (exists && (sources[uuid] === "original" || !hasOriginal)) { kept++; done++; return; }
+    if (exists && (sources[uuid] === "original" || !hasOriginal)) { kept++; writeProgress(++done); return; }
     const p = byUuid.get(uuid);
     const ders = (p?.path_derivatives || []).slice().sort((a, b) => sizeOf(b) - sizeOf(a));
     const wasPreview = exists && sources[uuid] !== "original";
     const r = await make(uuid, [rawSource(uuid), ...ders, p?.path_edited, p?.path]);
     if (r) { sources[uuid] = r; if (r === "original") { ori++; if (wasPreview) upgraded++; } else prev++; }
     else fail++;
-    if (++done % 50 === 0) console.log(`  … ${done}/${list.length}`);
+    writeProgress(++done);
+    if (done % 50 === 0) console.log(`  … ${done}/${list.length}`);
   }, CONCURRENCY);
   await fsp.writeFile(sidecar, JSON.stringify(sources));
+  try { fs.rmSync(progressFile); } catch {}
   console.log(`\n✓ [${slug}] ${ori + prev} rendered (${ori} from originals, ${prev} from preview), ${upgraded} upgraded, ${kept} unchanged.`);
   if (fail) console.log(`  ⚠ ${fail} failed (no source).`);
   const soft = list.filter((u) => sources[u] && sources[u] !== "original").length;

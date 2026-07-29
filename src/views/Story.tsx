@@ -78,19 +78,16 @@ export function Story({ slug }: { slug: string }) {
   useEffect(() => {
     if (!data || data.missingHd === 0 || prepRef.current) return;
     prepRef.current = true;
-    const target = data.missingHd;
     setHdBusy(true);
     setHdProgress(0);
     let cancelled = false;
     (async () => {
-      let start = 0;
-      try { start = (await api.webStatus(slug)).count; } catch {}
       const poll = window.setInterval(async () => {
         try {
-          const { count } = await api.webStatus(slug);
-          if (!cancelled) setHdProgress(Math.min(0.99, target ? Math.max(0, count - start) / target : 0));
+          const { running, done, total } = await api.webProgress(slug);
+          if (!cancelled && running && total) setHdProgress(Math.min(0.99, done / total));
         } catch {}
-      }, 500);
+      }, 400);
       try { await api.prepareWeb(slug); } catch {}
       window.clearInterval(poll);
       if (cancelled) return;

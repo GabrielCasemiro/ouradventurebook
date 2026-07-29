@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useApp } from "../App";
 import { api } from "../lib/api";
 import { getSlot, iterateSlots, slotName } from "../lib/album";
@@ -10,9 +10,11 @@ export function ExportPanel({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [finishLog, setFinishLog] = useState<string | null>(null);
+  const [prog, setProg] = useState<{ done: number; total: number } | null>(null);
   const [backupMsg, setBackupMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [padColor, setPadColor] = useState("FFFFFF");
+  const pollRef = useRef<number | null>(null);
 
   const BG_OPTIONS = [
     { hex: "FFFFFF", label: "White" },
@@ -62,12 +64,23 @@ export function ExportPanel({ onClose }: { onClose: () => void }) {
   const finish = async () => {
     setErr(null);
     setBusy(true);
+    setFinishLog(null);
+    setProg({ done: 0, total: 0 });
+    // poll the HD-generation progress while finish runs (rename → sharpen)
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const p = await api.webProgress(slug);
+        if (p.running) setProg({ done: p.done, total: p.total });
+      } catch {}
+    }, 400);
     try {
       const r = await api.exportFinish(slug);
       setFinishLog(r.log);
     } catch (e: any) {
       setErr(e.body?.stderr || e.body?.log || e.message || String(e));
     } finally {
+      if (pollRef.current) window.clearInterval(pollRef.current);
+      setProg(null);
       setBusy(false);
     }
   };
@@ -145,8 +158,23 @@ export function ExportPanel({ onClose }: { onClose: () => void }) {
                 <span className="step-n">3</span> Finish (rename + generate captions)
               </div>
               <button className="btn-primary" onClick={finish} disabled={busy}>
-                I ran it — finish
+                {busy ? "Finishing…" : "I ran it — finish"}
               </button>
+              {busy && (
+                <div className="exp-progress">
+                  {prog && prog.total > 0 ? (
+                    <>
+                      <div className="exp-bar"><div className="exp-fill" style={{ width: `${Math.round((prog.done / prog.total) * 100)}%` }} /></div>
+                      <span className="exp-prog-label">Sharpening in HD · {prog.done} / {prog.total}</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="exp-bar indeterminate"><div className="exp-fill" /></div>
+                      <span className="exp-prog-label">Renaming files & building captions…</span>
+                    </>
+                  )}
+                </div>
+              )}
               {finishLog && (
                 <pre className="finish-log">{finishLog}
 {"\n"}Files in: trips/{slug}/export/  ·  Captions: captions.html</pre>

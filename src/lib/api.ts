@@ -22,7 +22,7 @@ export const api = {
     fetch(`${base(slug)}/export/prepare`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items, options }) }).then(j),
   exportFinish: (slug: string): Promise<{ ok: boolean; log: string }> => fetch(`${base(slug)}/export/finish`, { method: "POST" }).then(j),
   prepareWeb: (slug: string): Promise<{ ok: boolean; log: string }> => fetch(`${base(slug)}/web/prepare`, { method: "POST" }).then(j),
-  webStatus: (slug: string): Promise<{ count: number }> => fetch(`${base(slug)}/web/status`).then(j),
+  webProgress: (slug: string): Promise<{ running: boolean; done: number; total: number }> => fetch(`${base(slug)}/web/progress`).then(j),
   uploadPhotos: (
     slug: string,
     files: FileList | File[],

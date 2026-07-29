@@ -400,6 +400,12 @@ textarea { font-family: inherit; }
 .cmd { position: relative; background: #0c1636; border-radius: 10px; padding: 14px 90px 14px 14px; }
 .cmd code { color: #cfe0ff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
 .btn-copy { position: absolute; top: 10px; right: 10px; border: 0; background: var(--gold); color: #3a2a05; font-weight: 700; padding: 6px 12px; border-radius: 8px; font-size: 12px; }
+.exp-progress { margin: 12px 0 0; display: flex; flex-direction: column; gap: 7px; }
+.exp-bar { height: 8px; border-radius: 999px; overflow: hidden; background: rgba(18, 48, 122, 0.12); position: relative; }
+.exp-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--blue), var(--gold)); transition: width 0.4s cubic-bezier(0.3, 0.8, 0.3, 1); }
+.exp-bar.indeterminate .exp-fill { width: 40%; animation: exp-slide 1.1s ease-in-out infinite; }
+@keyframes exp-slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+.exp-prog-label { font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .finish-log { margin: 12px 0 0; background: #0c1636; color: #b7f0d3; padding: 12px; border-radius: 10px; font-size: 12px; white-space: pre-wrap; }
 .err-msg { color: var(--danger); font-size: 14px; margin-top: 14px; }
 .modal-foot { display: flex; align-items: center; gap: 14px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }

@@ -318,12 +318,14 @@ app.post("/api/trips/:slug/web/prepare", withTrip, async (req, res) => {
   res.json({ ok: web.code === 0, log: web.out || web.err });
 });
 
-// how many HD renders exist right now (for a live progress bar while preparing)
-app.get("/api/trips/:slug/web/status", withTrip, (req, res) => {
-  let count = 0;
-  if (fs.existsSync(req.tp.web))
-    count = fs.readdirSync(req.tp.web).filter((f) => f.endsWith(".jpg") && !f.startsWith(".tmp")).length;
-  res.json({ count });
+// live progress of an in-flight make-web run (for a progress bar); running:false when idle
+app.get("/api/trips/:slug/web/progress", withTrip, (req, res) => {
+  const f = path.join(req.tp.web, ".progress.json");
+  if (fs.existsSync(f)) {
+    const p = readJSON(f) || {};
+    return res.json({ running: true, done: p.done || 0, total: p.total || 0 });
+  }
+  res.json({ running: false, done: 0, total: 0 });
 });
 
 app.post("/api/trips/:slug/export/finish", withTrip, async (req, res) => {
