@@ -47,13 +47,18 @@ function mergedManifest(tp, cfg) {
   const base = readJSON(tp.manifest);
   const uploads = readJSON(tp.uploadsJson) || [];
   const startMs = Date.parse(cfg.startDate + "T00:00:00");
-  // which photos have a high-res (HD) web render already generated
+  // which photos have a high-res (HD) web render, and what it was rendered from
   const webSet = new Set(
     (fs.existsSync(tp.web) ? fs.readdirSync(tp.web) : [])
-      .filter((f) => f.endsWith(".jpg"))
+      .filter((f) => f.endsWith(".jpg") && !f.startsWith(".tmp"))
       .map((f) => f.slice(0, -4))
   );
-  const photos = [...(base?.photos || []), ...uploads].map((p) => ({ ...p, hd: webSet.has(p.uuid) }));
+  const webSources = readJSON(path.join(tp.web, ".sources.json")) || {};
+  const photos = [...(base?.photos || []), ...uploads].map((p) => ({
+    ...p,
+    hd: webSet.has(p.uuid),
+    hdSource: webSet.has(p.uuid) ? webSources[p.uuid] || "preview" : undefined,
+  }));
   photos.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const days = Array.from({ length: cfg.days }, (_, i) => {
     const date = new Date(startMs + i * 86400000).toISOString().slice(0, 10);
@@ -284,9 +289,9 @@ app.post("/api/trips/:slug/export/prepare", withTrip, async (req, res) => {
   const osxUuids = uuids.filter((u) => !uploadedSet.has(u));
   await fsp.writeFile(req.tp.exportUuids, osxUuids.join("\n") + "\n");
 
-  // run from the project root (skip if there are no Apple Photos to download)
+  // paths are relative to the project root, so cd there first (copy-paste safe from anywhere)
   const command =
-    `osxphotos export ${rel}/export/_raw ` +
+    `cd ${ROOT} && osxphotos export ${rel}/export/_raw ` +
     `--uuid-from-file ${rel}/export-uuids.txt --download-missing --use-photokit ` +
     `--convert-to-jpeg --jpeg-quality 0.92 --filename "{uuid}" ` +
     `--skip-live --skip-raw --retry 3 --report ${rel}/export-full-report.csv`;
@@ -304,6 +309,24 @@ function runScript(cmd, args) {
     child.on("error", (e) => resolve({ code: -1, out, err: err + String(e) }));
   });
 }
+
+// Generate the digital-album HD renders (web/<uuid>.jpg) for any chosen/placed
+// photo that's still missing one. Incremental (make-web skips existing files),
+// so it's fast on repeat visits. Called automatically when the digital album opens.
+app.post("/api/trips/:slug/web/prepare", withTrip, async (req, res) => {
+  const web = await runScript(process.execPath, [path.join(ROOT, "scripts", "make-web.mjs"), req.params.slug]);
+  res.json({ ok: web.code === 0, log: web.out || web.err });
+});
+
+// live progress of an in-flight make-web run (for a progress bar); running:false when idle
+app.get("/api/trips/:slug/web/progress", withTrip, (req, res) => {
+  const f = path.join(req.tp.web, ".progress.json");
+  if (fs.existsSync(f)) {
+    const p = readJSON(f) || {};
+    return res.json({ running: true, done: p.done || 0, total: p.total || 0 });
+  }
+  res.json({ running: false, done: 0, total: 0 });
+});
 
 app.post("/api/trips/:slug/export/finish", withTrip, async (req, res) => {
   // 1) name the high-res files for the physical album (print)

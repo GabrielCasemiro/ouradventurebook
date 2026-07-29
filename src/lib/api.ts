@@ -21,6 +21,8 @@ export const api = {
   exportPrepare: (slug: string, items: unknown[], options?: unknown): Promise<{ ok: boolean; count: number; command: string }> =>
     fetch(`${base(slug)}/export/prepare`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items, options }) }).then(j),
   exportFinish: (slug: string): Promise<{ ok: boolean; log: string }> => fetch(`${base(slug)}/export/finish`, { method: "POST" }).then(j),
+  prepareWeb: (slug: string): Promise<{ ok: boolean; log: string }> => fetch(`${base(slug)}/web/prepare`, { method: "POST" }).then(j),
+  webProgress: (slug: string): Promise<{ running: boolean; done: number; total: number }> => fetch(`${base(slug)}/web/progress`).then(j),
   uploadPhotos: (
     slug: string,
     files: FileList | File[],
@@ -38,4 +40,7 @@ export const api = {
 };
 
 export const thumbUrl = (slug: string, uuid: string) => `/trips/${slug}/thumbs/${uuid}.jpg`;
-export const photoUrl = (slug: string, uuid: string) => `/trips/${slug}/photo/${uuid}`;
+// `v` (e.g. the render source) busts the browser cache when the same photo URL
+// starts serving a different (upgraded) image.
+export const photoUrl = (slug: string, uuid: string, v?: string) =>
+  `/trips/${slug}/photo/${uuid}${v ? `?v=${encodeURIComponent(v)}` : ""}`;

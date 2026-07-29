@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, photoUrl } from "../lib/api";
 import type { Manifest, Project, Photo, TripConfig } from "../lib/types";
 import { iterateSlots, getSlot } from "../lib/album";
@@ -25,6 +25,9 @@ export function Story({ slug }: { slug: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [activeDay, setActiveDay] = useState(1);
   const [hdDismissed, setHdDismissed] = useState(false);
+  const [hdBusy, setHdBusy] = useState(false);
+  const [hdProgress, setHdProgress] = useState(0);
+  const prepRef = useRef(false);
 
   useEffect(() => {
     api.config(slug).then(setConfig).catch((e) => setErr(String(e.message || e)));
@@ -32,6 +35,8 @@ export function Story({ slug }: { slug: string }) {
       .then(([m, p]) => { setManifest(m); setProject(p); })
       .catch((e) => setErr(e.body?.error === "manifest_missing" ? "This album has no imported photos yet." : String(e.message || e)));
   }, [slug]);
+
+  const reloadManifest = useCallback(() => api.manifest(slug).then(setManifest).catch(() => {}), [slug]);
 
   const data = useMemo(() => {
     if (!manifest || !project) return null;
@@ -59,16 +64,45 @@ export function Story({ slug }: { slug: string }) {
       ordered.find((i) => i.photo.width > i.photo.height)?.photo || ordered[0]?.photo || null;
     const stats = { dias: sections.length, fotos: ordered.length, legendas: ordered.filter((i) => i.caption.trim()).length };
     const missingHd = ordered.filter((i) => !i.photo.hd).length;
+    // rendered from a local preview (not the true original) → could be sharper if the original is downloaded
+    const softCount = ordered.filter((i) => i.photo.hd && i.photo.hdSource !== "original").length;
     const mapPoints: MapPoint[] = ordered
       .filter((i) => i.photo.meta?.lat != null && i.photo.meta?.lng != null)
       .map((i) => ({ lat: i.photo.meta!.lat!, lng: i.photo.meta!.lng!, uuid: i.uuid, caption: i.caption, dayIndex: i.dayIndex }));
-    return { sections, daysPresent, cover, stats, mapPoints, missingHd };
+    return { sections, daysPresent, cover, stats, mapPoints, missingHd, softCount };
   }, [manifest, project]);
+
+  // On open, silently generate any missing HD renders, then reload the manifest so
+  // the album shows full quality. Incremental → instant on repeat visits. A live
+  // progress bar polls how many renders exist while generation runs.
+  useEffect(() => {
+    if (!data || data.missingHd === 0 || prepRef.current) return;
+    prepRef.current = true;
+    setHdBusy(true);
+    setHdProgress(0);
+    let cancelled = false;
+    (async () => {
+      const poll = window.setInterval(async () => {
+        try {
+          const { running, done, total } = await api.webProgress(slug);
+          if (!cancelled && running && total) setHdProgress(Math.min(0.99, done / total));
+        } catch {}
+      }, 400);
+      try { await api.prepareWeb(slug); } catch {}
+      window.clearInterval(poll);
+      if (cancelled) return;
+      setHdProgress(1);
+      await reloadManifest();
+      setHdBusy(false);
+    })();
+    return () => { cancelled = true; };
+  }, [data, slug, reloadManifest]);
 
   if (err) return <div className="story-loading">{err}</div>;
   if (!config || !manifest || !project || !data) return <div className="story-loading"><span className="splash-star">✦</span></div>;
+  if (hdBusy) return <HdPreparing progress={hdProgress} total={data.missingHd} emoji={config.emoji} />;
 
-  const { sections, daysPresent, cover, stats, mapPoints, missingHd } = data;
+  const { sections, daysPresent, cover, stats, mapPoints, softCount } = data;
   const start = manifest.trip.startDate;
   const lastDate = sections.length ? sections[sections.length - 1].date : manifest.days[manifest.days.length - 1].date;
   const dateRange = `${fmtLong(start)} — ${fmtLong(lastDate)}, ${start.slice(0, 4)}`;
@@ -84,12 +118,14 @@ export function Story({ slug }: { slug: string }) {
         <Sparkles />
         {config.music && <Music videoId={config.music} />}
         <FloatingHeader emoji={config.emoji} days={daysPresent} activeDay={activeDay} onDay={goToDay} />
-        {missingHd > 0 && !hdDismissed && (
+        {softCount > 0 && !hdDismissed && (
           <div className="hd-notice" role="status">
             <span className="hd-notice-dot" aria-hidden="true">✦</span>
             <span className="hd-notice-text">
-              Showing low-res previews — {missingHd} photo{missingHd > 1 ? "s aren’t" : " isn’t"} in high resolution yet.
-              Open the <a href={`/trip/${slug}`}>editor</a>, run <strong>Export</strong> and click <strong>“I ran it — finish”</strong> to bring in the HD versions.
+              {softCount} photo{softCount > 1 ? "s are" : " is"} shown in medium quality — the full-resolution
+              original{softCount > 1 ? "s are" : " is"} still in the cloud, not on this Mac. Open the{" "}
+              <a href={`/trip/${slug}`}>editor</a> and run <strong>Export</strong> to download the originals — the album
+              then refreshes in full HD.
             </span>
             <button className="hd-notice-x" onClick={() => setHdDismissed(true)} aria-label="Dismiss">✕</button>
           </div>
@@ -142,6 +178,22 @@ const SPARKLES = [
   { top: "45%", left: "94%", d: "3.4s", dur: "6.2s", s: 3 }, { top: "18%", left: "36%", d: "1.5s", dur: "7.4s", s: 2 },
   { top: "58%", left: "58%", d: "2.9s", dur: "5.8s", s: 4 }, { top: "90%", left: "76%", d: "0.4s", dur: "6.6s", s: 2 },
 ];
+function HdPreparing({ progress, total, emoji }: { progress: number; total: number; emoji?: string }) {
+  const pct = Math.round(progress * 100);
+  const done = Math.min(total, Math.round(progress * total));
+  return (
+    <div className="story-loading hd-prep">
+      <Sparkles />
+      <div className="hd-prep-star">{emoji || "✦"}</div>
+      <h2 className="hd-prep-title">Preparing your album in high resolution…</h2>
+      <div className="hd-prep-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div className="hd-prep-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="hd-prep-sub">{done} / {total} photos · {pct}% · happens only once</p>
+    </div>
+  );
+}
+
 function Sparkles() {
   return (
     <div className="story-sparkles" aria-hidden="true">
@@ -162,7 +214,7 @@ function Cover({ config, cover, dateRange, stats }: { config: TripConfig; cover:
   }, []);
   return (
     <header className="story-cover">
-      <div className="story-cover-bgwrap" ref={bgRef}>{cover && <img className="story-cover-bg" src={photoUrl(slug, cover.uuid)} alt="" />}</div>
+      <div className="story-cover-bgwrap" ref={bgRef}>{cover && <img className="story-cover-bg" src={photoUrl(slug, cover.uuid, cover.hdSource)} alt="" />}</div>
       <div className="story-cover-veil" />
       <div className="story-cover-content reveal" ref={ref}>
         {config.kicker && <div className="story-kicker">{config.kicker}</div>}
@@ -217,7 +269,7 @@ function StoryPhoto({ item }: { item: StoryItem }) {
   const portrait = item.photo.height > item.photo.width;
   return (
     <figure className={`story-photo reveal ${portrait ? "portrait" : "landscape"}`} ref={ref}>
-      <div className="story-photo-frame"><img src={photoUrl(slug, item.uuid)} loading="lazy" alt={item.caption || item.photo.filename} /></div>
+      <div className="story-photo-frame"><img src={photoUrl(slug, item.uuid, item.photo.hdSource)} loading="lazy" alt={item.caption || item.photo.filename} /></div>
       {item.caption.trim() && <figcaption>{item.caption}</figcaption>}
     </figure>
   );
