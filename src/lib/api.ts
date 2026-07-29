@@ -1,4 +1,4 @@
-import type { Manifest, Project, TripConfig, TripSummary } from "./types";
+import type { Manifest, Project, Social, TripConfig, TripSummary } from "./types";
 
 const j = async (r: Response) => {
   if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status, body: await r.json().catch(() => ({})) });
@@ -37,6 +37,14 @@ export const api = {
   },
   deletePhoto: (slug: string, uuid: string): Promise<{ ok: boolean }> =>
     fetch(`${base(slug)}/photo/${encodeURIComponent(uuid)}`, { method: "DELETE" }).then(j),
+
+  getSocial: (slug: string): Promise<Social> => fetch(`${base(slug)}/social`).then(j),
+  putSocial: (slug: string, social: Social): Promise<{ ok: boolean; updatedAt: string }> =>
+    fetch(`${base(slug)}/social`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(social) }).then(j),
+  exportSocial: (slug: string, id?: string): Promise<{ ok: boolean; log: string; dir: string; folder?: string }> =>
+    fetch(`${base(slug)}/social/export`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).then(j),
+  revealSocial: (slug: string, id: string): Promise<{ ok: boolean }> =>
+    fetch(`${base(slug)}/social/reveal`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).then(j),
 };
 
 export const thumbUrl = (slug: string, uuid: string) => `/trips/${slug}/thumbs/${uuid}.jpg`;

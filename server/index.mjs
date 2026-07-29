@@ -264,6 +264,44 @@ app.post("/api/trips/:slug/backup", withTrip, async (req, res) => {
   res.json({ ok: true, file: path.relative(ROOT, dest) });
 });
 
+// ---- social carousels ----------------------------------------------------
+app.get("/api/trips/:slug/social", withTrip, (req, res) => {
+  res.json(readJSON(req.tp.social) || { carousels: [] });
+});
+
+app.put("/api/trips/:slug/social", withTrip, async (req, res) => {
+  const social = req.body;
+  if (!social || typeof social !== "object" || !Array.isArray(social.carousels))
+    return res.status(400).json({ error: "invalid_social" });
+  social.updatedAt = new Date().toISOString();
+  await fsp.writeFile(req.tp.social, JSON.stringify(social, null, 2));
+  res.json({ ok: true, updatedAt: social.updatedAt });
+});
+
+// render one carousel (or all) to social/<id>/NN.jpg + caption.txt
+app.post("/api/trips/:slug/social/export", withTrip, async (req, res) => {
+  const id = typeof req.body?.id === "string" ? req.body.id : "";
+  const args = [path.join(ROOT, "scripts", "make-social.mjs"), req.params.slug];
+  if (id) args.push(id);
+  const r = await runScript(process.execPath, args);
+  if (r.code !== 0) return res.status(500).json({ error: "render_failed", log: r.out, stderr: r.err });
+  const index = readJSON(path.join(req.tp.socialDir, "index.json")) || {};
+  res.json({ ok: true, log: r.out, dir: `trips/${req.params.slug}/social`, folder: id ? index[id] : undefined });
+});
+
+// reveal an exported carousel folder in Finder (macOS)
+app.post("/api/trips/:slug/social/reveal", withTrip, (req, res) => {
+  const id = String(req.body?.id || "");
+  const index = readJSON(path.join(req.tp.socialDir, "index.json")) || {};
+  const rel = index[id];
+  if (!rel) return res.status(404).json({ error: "not_exported" });
+  const abs = path.resolve(ROOT, rel);
+  if (!abs.startsWith(req.tp.socialDir)) return res.status(400).json({ error: "bad_path" });
+  if (!fs.existsSync(abs)) return res.status(404).json({ error: "missing" });
+  spawn("open", [abs]);
+  res.json({ ok: true });
+});
+
 // ---- export --------------------------------------------------------------
 app.post("/api/trips/:slug/export/prepare", withTrip, async (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : [];

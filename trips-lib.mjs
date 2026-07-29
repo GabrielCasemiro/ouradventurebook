@@ -34,6 +34,8 @@ export function tripPaths(slug) {
     book: path.join(dir, "book"),
     uploads: path.join(dir, "uploads"),       // original uploaded files
     uploadsJson: path.join(dir, "uploads.json"), // records for uploaded photos
+    social: path.join(dir, "social.json"),    // social-media carousels
+    socialDir: path.join(dir, "social"),      // rendered carousel exports
   };
 }
 

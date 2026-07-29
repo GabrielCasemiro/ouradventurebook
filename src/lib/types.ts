@@ -66,6 +66,22 @@ export interface Project {
   updatedAt: string | null;
 }
 
+export type SocialFormat = "4x5" | "1x1" | "9x16";
+
+export interface Carousel {
+  id: string;
+  title: string;
+  format: SocialFormat;
+  background: string; // "blur" or a 6-char hex (e.g. "FFFFFF")
+  slides: string[]; // photo uuids, in order
+  caption: string;
+}
+
+export interface Social {
+  carousels: Carousel[];
+  updatedAt?: string;
+}
+
 export interface TripConfig {
   slug: string;
   title: string;
