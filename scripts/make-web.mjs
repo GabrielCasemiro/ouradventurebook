@@ -63,19 +63,30 @@ async function main() {
   const byUuid = new Map(parsePhotos().map((p) => [p.uuid, p]));
   const list = [...used];
   if (!list.length) die("No photos chosen/placed yet.");
-  console.log(`• [${slug}] Generating ${list.length} web images @${MAX_DIM}px…`);
-  let done = 0, ori = 0, prev = 0, fail = 0;
+  // remember which source each render came from, so a render made from a local
+  // preview can be upgraded to the true original once it's been downloaded.
+  const sidecar = path.join(tp.web, ".sources.json");
+  const sources = readJSON(sidecar) || {};
+  console.log(`• [${slug}] Preparing web images @${MAX_DIM}px for ${list.length} photos…`);
+  let done = 0, ori = 0, prev = 0, fail = 0, upgraded = 0, kept = 0;
   await pool(list, async (uuid) => {
     const dest = path.join(tp.web, `${uuid}.jpg`);
-    if (fs.existsSync(dest)) { done++; return; }
+    const exists = fs.existsSync(dest);
+    const hasOriginal = !!rawSource(uuid);
+    // keep what we have if it's already the original, or if nothing better exists locally yet
+    if (exists && (sources[uuid] === "original" || !hasOriginal)) { kept++; done++; return; }
     const p = byUuid.get(uuid);
     const ders = (p?.path_derivatives || []).slice().sort((a, b) => sizeOf(b) - sizeOf(a));
+    const wasPreview = exists && sources[uuid] !== "original";
     const r = await make(uuid, [rawSource(uuid), ...ders, p?.path_edited, p?.path]);
-    if (r === "original") ori++; else if (r === "preview") prev++; else fail++;
+    if (r) { sources[uuid] = r; if (r === "original") { ori++; if (wasPreview) upgraded++; } else prev++; }
+    else fail++;
     if (++done % 50 === 0) console.log(`  … ${done}/${list.length}`);
   }, CONCURRENCY);
-  console.log(`\n✓ [${slug}] ${ori + prev}/${list.length} web images (${ori} from originals, ${prev} from preview).`);
+  await fsp.writeFile(sidecar, JSON.stringify(sources));
+  console.log(`\n✓ [${slug}] ${ori + prev} rendered (${ori} from originals, ${prev} from preview), ${upgraded} upgraded, ${kept} unchanged.`);
   if (fail) console.log(`  ⚠ ${fail} failed (no source).`);
-  if (!ori && prev) console.log(`  Tip: run Export (downloads originals) then \`npm run web -- ${slug}\`.`);
+  const soft = list.filter((u) => sources[u] && sources[u] !== "original").length;
+  if (soft) console.log(`  ℹ ${soft} photos are from local previews — run Export to download originals for full HD.`);
 }
 main().catch((e) => die(e.stack || String(e)));

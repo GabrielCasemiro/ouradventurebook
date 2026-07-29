@@ -40,4 +40,7 @@ export const api = {
 };
 
 export const thumbUrl = (slug: string, uuid: string) => `/trips/${slug}/thumbs/${uuid}.jpg`;
-export const photoUrl = (slug: string, uuid: string) => `/trips/${slug}/photo/${uuid}`;
+// `v` (e.g. the render source) busts the browser cache when the same photo URL
+// starts serving a different (upgraded) image.
+export const photoUrl = (slug: string, uuid: string, v?: string) =>
+  `/trips/${slug}/photo/${uuid}${v ? `?v=${encodeURIComponent(v)}` : ""}`;

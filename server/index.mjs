@@ -47,13 +47,18 @@ function mergedManifest(tp, cfg) {
   const base = readJSON(tp.manifest);
   const uploads = readJSON(tp.uploadsJson) || [];
   const startMs = Date.parse(cfg.startDate + "T00:00:00");
-  // which photos have a high-res (HD) web render already generated
+  // which photos have a high-res (HD) web render, and what it was rendered from
   const webSet = new Set(
     (fs.existsSync(tp.web) ? fs.readdirSync(tp.web) : [])
-      .filter((f) => f.endsWith(".jpg"))
+      .filter((f) => f.endsWith(".jpg") && !f.startsWith(".tmp"))
       .map((f) => f.slice(0, -4))
   );
-  const photos = [...(base?.photos || []), ...uploads].map((p) => ({ ...p, hd: webSet.has(p.uuid) }));
+  const webSources = readJSON(path.join(tp.web, ".sources.json")) || {};
+  const photos = [...(base?.photos || []), ...uploads].map((p) => ({
+    ...p,
+    hd: webSet.has(p.uuid),
+    hdSource: webSet.has(p.uuid) ? webSources[p.uuid] || "preview" : undefined,
+  }));
   photos.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const days = Array.from({ length: cfg.days }, (_, i) => {
     const date = new Date(startMs + i * 86400000).toISOString().slice(0, 10);

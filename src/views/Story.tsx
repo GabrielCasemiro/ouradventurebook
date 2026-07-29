@@ -64,10 +64,12 @@ export function Story({ slug }: { slug: string }) {
       ordered.find((i) => i.photo.width > i.photo.height)?.photo || ordered[0]?.photo || null;
     const stats = { dias: sections.length, fotos: ordered.length, legendas: ordered.filter((i) => i.caption.trim()).length };
     const missingHd = ordered.filter((i) => !i.photo.hd).length;
+    // rendered from a local preview (not the true original) → could be sharper if the original is downloaded
+    const softCount = ordered.filter((i) => i.photo.hd && i.photo.hdSource !== "original").length;
     const mapPoints: MapPoint[] = ordered
       .filter((i) => i.photo.meta?.lat != null && i.photo.meta?.lng != null)
       .map((i) => ({ lat: i.photo.meta!.lat!, lng: i.photo.meta!.lng!, uuid: i.uuid, caption: i.caption, dayIndex: i.dayIndex }));
-    return { sections, daysPresent, cover, stats, mapPoints, missingHd };
+    return { sections, daysPresent, cover, stats, mapPoints, missingHd, softCount };
   }, [manifest, project]);
 
   // On open, silently generate any missing HD renders, then reload the manifest so
@@ -103,7 +105,7 @@ export function Story({ slug }: { slug: string }) {
   if (!config || !manifest || !project || !data) return <div className="story-loading"><span className="splash-star">✦</span></div>;
   if (hdBusy) return <HdPreparing progress={hdProgress} total={data.missingHd} emoji={config.emoji} />;
 
-  const { sections, daysPresent, cover, stats, mapPoints, missingHd } = data;
+  const { sections, daysPresent, cover, stats, mapPoints, softCount } = data;
   const start = manifest.trip.startDate;
   const lastDate = sections.length ? sections[sections.length - 1].date : manifest.days[manifest.days.length - 1].date;
   const dateRange = `${fmtLong(start)} — ${fmtLong(lastDate)}, ${start.slice(0, 4)}`;
@@ -119,12 +121,14 @@ export function Story({ slug }: { slug: string }) {
         <Sparkles />
         {config.music && <Music videoId={config.music} />}
         <FloatingHeader emoji={config.emoji} days={daysPresent} activeDay={activeDay} onDay={goToDay} />
-        {missingHd > 0 && !hdDismissed && (
+        {softCount > 0 && !hdDismissed && (
           <div className="hd-notice" role="status">
             <span className="hd-notice-dot" aria-hidden="true">✦</span>
             <span className="hd-notice-text">
-              {missingHd} photo{missingHd > 1 ? "s" : ""} couldn’t be prepared in high resolution — showing the preview instead.
-              Its original may not be available locally.
+              {softCount} photo{softCount > 1 ? "s are" : " is"} shown in medium quality — the full-resolution
+              original{softCount > 1 ? "s are" : " is"} still in the cloud, not on this Mac. Open the{" "}
+              <a href={`/trip/${slug}`}>editor</a> and run <strong>Export</strong> to download the originals — the album
+              then refreshes in full HD.
             </span>
             <button className="hd-notice-x" onClick={() => setHdDismissed(true)} aria-label="Dismiss">✕</button>
           </div>
@@ -213,7 +217,7 @@ function Cover({ config, cover, dateRange, stats }: { config: TripConfig; cover:
   }, []);
   return (
     <header className="story-cover">
-      <div className="story-cover-bgwrap" ref={bgRef}>{cover && <img className="story-cover-bg" src={photoUrl(slug, cover.uuid)} alt="" />}</div>
+      <div className="story-cover-bgwrap" ref={bgRef}>{cover && <img className="story-cover-bg" src={photoUrl(slug, cover.uuid, cover.hdSource)} alt="" />}</div>
       <div className="story-cover-veil" />
       <div className="story-cover-content reveal" ref={ref}>
         {config.kicker && <div className="story-kicker">{config.kicker}</div>}
@@ -268,7 +272,7 @@ function StoryPhoto({ item }: { item: StoryItem }) {
   const portrait = item.photo.height > item.photo.width;
   return (
     <figure className={`story-photo reveal ${portrait ? "portrait" : "landscape"}`} ref={ref}>
-      <div className="story-photo-frame"><img src={photoUrl(slug, item.uuid)} loading="lazy" alt={item.caption || item.photo.filename} /></div>
+      <div className="story-photo-frame"><img src={photoUrl(slug, item.uuid, item.photo.hdSource)} loading="lazy" alt={item.caption || item.photo.filename} /></div>
       {item.caption.trim() && <figcaption>{item.caption}</figcaption>}
     </figure>
   );
