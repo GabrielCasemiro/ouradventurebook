@@ -219,7 +219,7 @@ export function Social({ goCuradoria }: { goCuradoria: () => void }) {
             >
               {saveStatus === "saving" ? "Saving…" : dirty ? "Save" : "Saved ✓"}
             </button>
-            <button className="btn-ghost sm dark" onClick={doExport} disabled={exporting || posting || sel.slides.length === 0}>
+            <button className="btn-ghost sm" onClick={doExport} disabled={exporting || posting || sel.slides.length === 0}>
               {exporting ? "Exporting…" : "Export"}
             </button>
             <button className="social-ig" onClick={postToInstagram} disabled={posting || exporting || sel.slides.length === 0}>
