@@ -22,6 +22,7 @@ export interface Photo {
   sig?: string;
   meta?: PhotoMeta;
   source?: string;
+  hd?: boolean; // a high-res web render exists (else served as a low-res thumbnail)
 }
 
 export interface DayInfo {

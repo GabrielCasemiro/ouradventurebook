@@ -565,6 +565,27 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 .story-end-castle { font-size: 60px; margin-top: 30px; filter: drop-shadow(0 8px 30px rgba(0, 0, 0, 0.5)); }
 
 /* Floating header with a day index */
+.hd-notice {
+  position: fixed; top: 66px; left: 50%; transform: translateX(-50%); z-index: 45;
+  width: min(680px, calc(100vw - 24px)); display: flex; align-items: center; gap: 12px;
+  padding: 11px 12px 11px 16px; border-radius: 14px;
+  background: linear-gradient(180deg, rgba(20, 32, 74, 0.96), rgba(14, 24, 60, 0.96));
+  border: 1px solid rgba(244, 212, 136, 0.35); box-shadow: 0 12px 34px rgba(4, 10, 34, 0.5);
+  backdrop-filter: blur(10px); color: #eaf0ff; font-size: 13px; line-height: 1.4;
+  animation: hd-drop 0.4s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+@keyframes hd-drop { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.hd-notice-dot { color: var(--gold-soft); font-size: 15px; flex: none; }
+.hd-notice-text { flex: 1; }
+.hd-notice-text a { color: var(--gold-soft); text-decoration: underline; text-underline-offset: 2px; }
+.hd-notice-text strong { color: #fff; }
+.hd-notice-x {
+  flex: none; width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer;
+  background: rgba(255, 255, 255, 0.08); color: #cdd8ff; font-size: 12px; display: grid; place-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+.hd-notice-x:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+
 .fh {
   position: fixed; top: 0; left: 0; right: 0; z-index: 40; height: 56px;
   display: flex; align-items: center; gap: 14px; padding: 0 16px;

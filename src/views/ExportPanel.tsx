@@ -90,8 +90,8 @@ export function ExportPanel({ onClose }: { onClose: () => void }) {
         <button className="modal-close" onClick={onClose}>✕</button>
         <h2>Export for printing</h2>
         <p className="muted">
-          {items.length} photo(s) placed in the album. This prepares a high-resolution download, naming each
-          file by sheet, side and slot.
+          {items.length} photo(s) placed in the album. This downloads the originals in high resolution, names each
+          print file by sheet, side and slot, <b>and</b> refreshes the digital album with the HD images.
         </p>
 
         {vertCount > 0 && (
@@ -142,7 +142,7 @@ export function ExportPanel({ onClose }: { onClose: () => void }) {
           {command && (
             <li className="step">
               <div className="step-head">
-                <span className="step-n">3</span> Finish (rename + generate captions)
+                <span className="step-n">3</span> Finish (rename print files + captions + digital-album HD)
               </div>
               <button className="btn-primary" onClick={finish} disabled={busy}>
                 I ran it — finish
