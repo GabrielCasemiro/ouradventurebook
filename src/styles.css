@@ -762,6 +762,10 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 .social-title-input::placeholder { color: rgba(205,216,255,0.45); }
 .social-title-input:focus { outline: none; border-bottom-color: var(--gold-soft); }
 .btn-gold.sm { padding: 8px 16px; font-size: 13px; }
+.social-save { padding: 8px 16px; font-size: 13px; font-weight: 700; border-radius: 999px; cursor: pointer; border: 1px solid rgba(255,255,255,0.22); background: transparent; color: #cdd8ff; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.social-save:disabled { opacity: 0.7; cursor: default; }
+.social-save.dirty { border-color: var(--gold-soft); color: var(--gold-soft); background: rgba(244,212,136,0.08); }
+.social-save.dirty:hover { background: rgba(244,212,136,0.16); }
 .social-export-msg { margin: -8px 0 0; font-size: 13px; color: var(--gold-soft); }
 
 .social-controls { display: flex; flex-wrap: wrap; gap: 26px; }
@@ -793,7 +797,12 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 .social-caption { width: 100%; min-height: 110px; resize: vertical; border: 1px solid var(--paper-2); border-radius: 12px; padding: 12px 14px; font: inherit; font-size: 14px; line-height: 1.5; color: var(--ink); background: var(--paper); }
 .social-caption:focus { outline: none; border-color: var(--blue); }
 
-.social-tray { border-top: 1px solid var(--paper-2); padding-top: 16px; }
+.social-tray { border-top: 1px solid rgba(255,255,255,0.12); padding-top: 16px; }
+.social-tray-days { display: flex; flex-direction: column; gap: 16px; }
+.social-tray-day-label { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.social-tray-day-n { font-family: var(--font-display); font-weight: 600; font-size: 14px; color: #eaf0ff; }
+.social-tray-day-date { font-size: 12px; color: #9aa7c8; text-transform: uppercase; letter-spacing: 0.5px; }
+.social-tray-day-count { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--gold-soft); background: rgba(244,212,136,0.12); padding: 2px 9px; border-radius: 999px; }
 .social-tray-strip { display: flex; flex-wrap: wrap; gap: 8px; }
 .social-tray-thumb { position: relative; width: 78px; height: 78px; border-radius: 9px; overflow: hidden; border: 0; padding: 0; cursor: pointer; box-shadow: var(--shadow-md); }
 .social-tray-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }

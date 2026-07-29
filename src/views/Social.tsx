@@ -18,6 +18,13 @@ const BACKGROUNDS: { value: string; label: string; css?: string }[] = [
   { value: "000000", label: "Black", css: "#000000" },
 ];
 
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const fmtDay = (iso: string) => {
+  if (!iso) return "";
+  const [, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return `${d} ${MONTHS[(m || 1) - 1]}`;
+};
+
 const uid = () =>
   (globalThis.crypto?.randomUUID?.() ?? `c-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
 
@@ -35,6 +42,7 @@ export function Social({ goCuradoria }: { goCuradoria: () => void }) {
   const [social, setSocial] = useState<SocialData | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [dirty, setDirty] = useState(false);
   const [drag, setDrag] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
@@ -47,13 +55,23 @@ export function Social({ goCuradoria }: { goCuradoria: () => void }) {
     }).catch(() => setSocial({ carousels: [] }));
   }, [slug]);
 
-  const save = useCallback((next: SocialData) => {
-    if (timerRef.current) window.clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(async () => {
-      setSaveStatus("saving");
-      try { await api.putSocial(slug, next); setSaveStatus("saved"); } catch { setSaveStatus("error"); }
-    }, 500);
+  const persist = useCallback(async (next: SocialData) => {
+    setSaveStatus("saving");
+    try { await api.putSocial(slug, next); setSaveStatus("saved"); setDirty(false); }
+    catch { setSaveStatus("error"); }
   }, [slug]);
+
+  const save = useCallback((next: SocialData) => {
+    setDirty(true);
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => persist(next), 700);
+  }, [persist]);
+
+  const flushSave = () => {
+    if (!social) return;
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    persist(social);
+  };
 
   const mutate = useCallback((fn: (cs: Carousel[]) => Carousel[]) => {
     setSocial((prev) => {
@@ -89,6 +107,13 @@ export function Social({ goCuradoria }: { goCuradoria: () => void }) {
 
   const sel = social.carousels.find((c) => c.id === selId) || null;
   const tray = sel ? chosenSorted.filter((p) => !sel.slides.includes(p.uuid)) : [];
+  // group the tray by day (chosenSorted is already in chronological order)
+  const trayDays: { day: number; date: string; items: typeof tray }[] = [];
+  for (const p of tray) {
+    let g = trayDays[trayDays.length - 1];
+    if (!g || g.day !== p.dayIndex) { g = { day: p.dayIndex, date: p.date, items: [] }; trayDays.push(g); }
+    g.items.push(p);
+  }
 
   const addSlide = (uuid: string) => patchSel({ slides: [...(sel?.slides || []), uuid] });
   const removeSlide = (i: number) => patchSel({ slides: (sel?.slides || []).filter((_, idx) => idx !== i) });
@@ -136,7 +161,6 @@ export function Social({ goCuradoria }: { goCuradoria: () => void }) {
       <aside className="social-list">
         <div className="social-list-head">
           <span>Carousels</span>
-          <SaveDot status={saveStatus} />
         </div>
         {social.carousels.map((c) => (
           <button
@@ -166,6 +190,14 @@ export function Social({ goCuradoria }: { goCuradoria: () => void }) {
               placeholder="Post title (for your reference)"
               onChange={(e) => patchSel({ title: e.target.value })}
             />
+            <button
+              className={`social-save${dirty ? " dirty" : ""}`}
+              onClick={flushSave}
+              disabled={saveStatus === "saving"}
+              title="Changes save automatically; click to save now"
+            >
+              {saveStatus === "saving" ? "Saving…" : dirty ? "Save" : "Saved ✓"}
+            </button>
             <button className="btn-gold sm" onClick={doExport} disabled={exporting || sel.slides.length === 0}>
               {exporting ? "Exporting…" : "Export carousel"}
             </button>
@@ -244,12 +276,23 @@ export function Social({ goCuradoria }: { goCuradoria: () => void }) {
             <div className="social-section-label">
               {tray.length > 0 ? `${tray.length} chosen photo${tray.length === 1 ? "" : "s"} — click to add` : "All chosen photos are in this carousel"}
             </div>
-            <div className="social-tray-strip">
-              {tray.map((p) => (
-                <button key={p.uuid} className="social-tray-thumb" onClick={() => addSlide(p.uuid)} title={`Day ${p.dayIndex} · add`}>
-                  <img src={thumbUrl(slug, p.uuid)} loading="lazy" alt="" />
-                  <span className="social-tray-add">＋</span>
-                </button>
+            <div className="social-tray-days">
+              {trayDays.map((g) => (
+                <div className="social-tray-day" key={g.day}>
+                  <div className="social-tray-day-label">
+                    <span className="social-tray-day-n">Day {g.day}</span>
+                    <span className="social-tray-day-date">{fmtDay(g.date)}</span>
+                    <span className="social-tray-day-count">{g.items.length}</span>
+                  </div>
+                  <div className="social-tray-strip">
+                    {g.items.map((p) => (
+                      <button key={p.uuid} className="social-tray-thumb" onClick={() => addSlide(p.uuid)} title={`Day ${p.dayIndex} · add`}>
+                        <img src={thumbUrl(slug, p.uuid)} loading="lazy" alt="" />
+                        <span className="social-tray-add">＋</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -264,10 +307,4 @@ export function Social({ goCuradoria }: { goCuradoria: () => void }) {
       )}
     </div>
   );
-}
-
-function SaveDot({ status }: { status: "idle" | "saving" | "saved" | "error" }) {
-  const map = { idle: ["ok", "saved"], saving: ["wait", "saving…"], saved: ["ok", "saved ✓"], error: ["err", "error"] } as const;
-  const [c, t] = map[status];
-  return <span className={`save-badge ${c}`}>{t}</span>;
 }
