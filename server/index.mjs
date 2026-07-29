@@ -264,6 +264,30 @@ app.post("/api/trips/:slug/backup", withTrip, async (req, res) => {
   res.json({ ok: true, file: path.relative(ROOT, dest) });
 });
 
+// ---- social carousels ----------------------------------------------------
+app.get("/api/trips/:slug/social", withTrip, (req, res) => {
+  res.json(readJSON(req.tp.social) || { carousels: [] });
+});
+
+app.put("/api/trips/:slug/social", withTrip, async (req, res) => {
+  const social = req.body;
+  if (!social || typeof social !== "object" || !Array.isArray(social.carousels))
+    return res.status(400).json({ error: "invalid_social" });
+  social.updatedAt = new Date().toISOString();
+  await fsp.writeFile(req.tp.social, JSON.stringify(social, null, 2));
+  res.json({ ok: true, updatedAt: social.updatedAt });
+});
+
+// render one carousel (or all) to social/<id>/NN.jpg + caption.txt
+app.post("/api/trips/:slug/social/export", withTrip, async (req, res) => {
+  const id = typeof req.body?.id === "string" ? req.body.id : "";
+  const args = [path.join(ROOT, "scripts", "make-social.mjs"), req.params.slug];
+  if (id) args.push(id);
+  const r = await runScript(process.execPath, args);
+  if (r.code !== 0) return res.status(500).json({ error: "render_failed", log: r.out, stderr: r.err });
+  res.json({ ok: true, log: r.out, dir: `trips/${req.params.slug}/social` });
+});
+
 // ---- export --------------------------------------------------------------
 app.post("/api/trips/:slug/export/prepare", withTrip, async (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : [];

@@ -4,6 +4,7 @@ import type { Manifest, Photo, PhotoState, Project, TripConfig } from "./lib/typ
 import { countPlaced, countSheetsUsed, emptySheets } from "./lib/album";
 import { Curadoria } from "./views/Curadoria";
 import { Album } from "./views/Album";
+import { Social } from "./views/Social";
 import { ExportPanel } from "./views/ExportPanel";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -28,7 +29,7 @@ export const useApp = () => {
   return c;
 };
 
-type View = "curadoria" | "album";
+type View = "curadoria" | "album" | "social";
 
 export function App({ slug }: { slug: string }) {
   const [config, setConfig] = useState<TripConfig | null>(null);
@@ -129,6 +130,7 @@ export function App({ slug }: { slug: string }) {
           <nav className="tabs">
             <button className={view === "curadoria" ? "tab on" : "tab"} onClick={() => setView("curadoria")}>Curate</button>
             <button className={view === "album" ? "tab on" : "tab"} onClick={() => setView("album")}>Album</button>
+            <button className={view === "social" ? "tab on" : "tab"} onClick={() => setView("social")}>Social</button>
           </nav>
 
           <div className="top-right">
@@ -146,8 +148,10 @@ export function App({ slug }: { slug: string }) {
         <main className="content">
           {view === "curadoria" ? (
             <Curadoria activeDay={activeDay} setActiveDay={setActiveDay} />
-          ) : (
+          ) : view === "album" ? (
             <Album goCuradoria={() => setView("curadoria")} />
+          ) : (
+            <Social goCuradoria={() => setView("curadoria")} />
           )}
         </main>
 
