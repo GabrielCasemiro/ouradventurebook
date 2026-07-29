@@ -21,6 +21,8 @@ export const api = {
   exportPrepare: (slug: string, items: unknown[], options?: unknown): Promise<{ ok: boolean; count: number; command: string }> =>
     fetch(`${base(slug)}/export/prepare`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items, options }) }).then(j),
   exportFinish: (slug: string): Promise<{ ok: boolean; log: string }> => fetch(`${base(slug)}/export/finish`, { method: "POST" }).then(j),
+  prepareWeb: (slug: string): Promise<{ ok: boolean; log: string }> => fetch(`${base(slug)}/web/prepare`, { method: "POST" }).then(j),
+  webStatus: (slug: string): Promise<{ count: number }> => fetch(`${base(slug)}/web/status`).then(j),
   uploadPhotos: (
     slug: string,
     files: FileList | File[],

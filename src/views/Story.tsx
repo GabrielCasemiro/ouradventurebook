@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, photoUrl } from "../lib/api";
 import type { Manifest, Project, Photo, TripConfig } from "../lib/types";
 import { iterateSlots, getSlot } from "../lib/album";
@@ -25,6 +25,9 @@ export function Story({ slug }: { slug: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [activeDay, setActiveDay] = useState(1);
   const [hdDismissed, setHdDismissed] = useState(false);
+  const [hdBusy, setHdBusy] = useState(false);
+  const [hdProgress, setHdProgress] = useState(0);
+  const prepRef = useRef(false);
 
   useEffect(() => {
     api.config(slug).then(setConfig).catch((e) => setErr(String(e.message || e)));
@@ -32,6 +35,8 @@ export function Story({ slug }: { slug: string }) {
       .then(([m, p]) => { setManifest(m); setProject(p); })
       .catch((e) => setErr(e.body?.error === "manifest_missing" ? "This album has no imported photos yet." : String(e.message || e)));
   }, [slug]);
+
+  const reloadManifest = useCallback(() => api.manifest(slug).then(setManifest).catch(() => {}), [slug]);
 
   const data = useMemo(() => {
     if (!manifest || !project) return null;
@@ -65,8 +70,38 @@ export function Story({ slug }: { slug: string }) {
     return { sections, daysPresent, cover, stats, mapPoints, missingHd };
   }, [manifest, project]);
 
+  // On open, silently generate any missing HD renders, then reload the manifest so
+  // the album shows full quality. Incremental → instant on repeat visits. A live
+  // progress bar polls how many renders exist while generation runs.
+  useEffect(() => {
+    if (!data || data.missingHd === 0 || prepRef.current) return;
+    prepRef.current = true;
+    const target = data.missingHd;
+    setHdBusy(true);
+    setHdProgress(0);
+    let cancelled = false;
+    (async () => {
+      let start = 0;
+      try { start = (await api.webStatus(slug)).count; } catch {}
+      const poll = window.setInterval(async () => {
+        try {
+          const { count } = await api.webStatus(slug);
+          if (!cancelled) setHdProgress(Math.min(0.99, target ? Math.max(0, count - start) / target : 0));
+        } catch {}
+      }, 500);
+      try { await api.prepareWeb(slug); } catch {}
+      window.clearInterval(poll);
+      if (cancelled) return;
+      setHdProgress(1);
+      await reloadManifest();
+      setHdBusy(false);
+    })();
+    return () => { cancelled = true; };
+  }, [data, slug, reloadManifest]);
+
   if (err) return <div className="story-loading">{err}</div>;
   if (!config || !manifest || !project || !data) return <div className="story-loading"><span className="splash-star">✦</span></div>;
+  if (hdBusy) return <HdPreparing progress={hdProgress} total={data.missingHd} emoji={config.emoji} />;
 
   const { sections, daysPresent, cover, stats, mapPoints, missingHd } = data;
   const start = manifest.trip.startDate;
@@ -88,8 +123,8 @@ export function Story({ slug }: { slug: string }) {
           <div className="hd-notice" role="status">
             <span className="hd-notice-dot" aria-hidden="true">✦</span>
             <span className="hd-notice-text">
-              Showing low-res previews — {missingHd} photo{missingHd > 1 ? "s aren’t" : " isn’t"} in high resolution yet.
-              Open the <a href={`/trip/${slug}`}>editor</a>, run <strong>Export</strong> and click <strong>“I ran it — finish”</strong> to bring in the HD versions.
+              {missingHd} photo{missingHd > 1 ? "s" : ""} couldn’t be prepared in high resolution — showing the preview instead.
+              Its original may not be available locally.
             </span>
             <button className="hd-notice-x" onClick={() => setHdDismissed(true)} aria-label="Dismiss">✕</button>
           </div>
@@ -142,6 +177,22 @@ const SPARKLES = [
   { top: "45%", left: "94%", d: "3.4s", dur: "6.2s", s: 3 }, { top: "18%", left: "36%", d: "1.5s", dur: "7.4s", s: 2 },
   { top: "58%", left: "58%", d: "2.9s", dur: "5.8s", s: 4 }, { top: "90%", left: "76%", d: "0.4s", dur: "6.6s", s: 2 },
 ];
+function HdPreparing({ progress, total, emoji }: { progress: number; total: number; emoji?: string }) {
+  const pct = Math.round(progress * 100);
+  const done = Math.min(total, Math.round(progress * total));
+  return (
+    <div className="story-loading hd-prep">
+      <Sparkles />
+      <div className="hd-prep-star">{emoji || "✦"}</div>
+      <h2 className="hd-prep-title">Preparing your album in high resolution…</h2>
+      <div className="hd-prep-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div className="hd-prep-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="hd-prep-sub">{done} / {total} photos · {pct}% · happens only once</p>
+    </div>
+  );
+}
+
 function Sparkles() {
   return (
     <div className="story-sparkles" aria-hidden="true">

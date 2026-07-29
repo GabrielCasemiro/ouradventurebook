@@ -305,6 +305,22 @@ function runScript(cmd, args) {
   });
 }
 
+// Generate the digital-album HD renders (web/<uuid>.jpg) for any chosen/placed
+// photo that's still missing one. Incremental (make-web skips existing files),
+// so it's fast on repeat visits. Called automatically when the digital album opens.
+app.post("/api/trips/:slug/web/prepare", withTrip, async (req, res) => {
+  const web = await runScript(process.execPath, [path.join(ROOT, "scripts", "make-web.mjs"), req.params.slug]);
+  res.json({ ok: web.code === 0, log: web.out || web.err });
+});
+
+// how many HD renders exist right now (for a live progress bar while preparing)
+app.get("/api/trips/:slug/web/status", withTrip, (req, res) => {
+  let count = 0;
+  if (fs.existsSync(req.tp.web))
+    count = fs.readdirSync(req.tp.web).filter((f) => f.endsWith(".jpg") && !f.startsWith(".tmp")).length;
+  res.json({ count });
+});
+
 app.post("/api/trips/:slug/export/finish", withTrip, async (req, res) => {
   // 1) name the high-res files for the physical album (print)
   const rename = await runScript(PYTHON, [path.join(ROOT, "scripts", "rename-export.py"), req.params.slug]);
