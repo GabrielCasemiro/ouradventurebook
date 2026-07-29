@@ -7,7 +7,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveSlugFromArgs, tripPaths, readJSON, PYTHON } from "../trips-lib.mjs";
+import { ROOT, resolveSlugFromArgs, tripPaths, readJSON, PYTHON } from "../trips-lib.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const die = (m) => { console.error("✖ " + m); process.exit(1); };
@@ -60,6 +60,9 @@ async function main() {
   const tick = () => { try { fs.writeFileSync(progress, JSON.stringify({ done: ++done, total: totalSlides })); } catch {} };
   try { fs.writeFileSync(progress, JSON.stringify({ done: 0, total: totalSlides })); } catch {}
 
+  const indexPath = path.join(tp.socialDir, "index.json");
+  const index = readJSON(indexPath) || {};
+
   let rendered = 0, missing = 0;
   for (let i = 0; i < carousels.length; i++) {
     const c = carousels[i];
@@ -68,6 +71,7 @@ async function main() {
     const dir = path.join(tp.socialDir, folderName(c, i));
     await fsp.rm(dir, { recursive: true, force: true });
     await fsp.mkdir(dir, { recursive: true });
+    index[c.id] = path.relative(ROOT, dir);
     const slides = c.slides || [];
     console.log(`• ${folderName(c, i)} — ${slides.length} slide(s) @ ${w}x${h} (${c.format || "4x5"}, ${bg})`);
     for (let s = 0; s < slides.length; s++) {
@@ -80,6 +84,7 @@ async function main() {
     if (c.caption && c.caption.trim()) await fsp.writeFile(path.join(dir, "caption.txt"), c.caption.trim() + "\n");
   }
   try { fs.rmSync(progress); } catch {}
+  await fsp.writeFile(indexPath, JSON.stringify(index, null, 2));
   console.log(`\n✓ [${slug}] ${rendered} slide(s) rendered${missing ? `, ${missing} missing source` : ""}.`);
 }
 main().catch((e) => die(e.stack || String(e)));

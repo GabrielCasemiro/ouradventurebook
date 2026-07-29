@@ -45,6 +45,7 @@ export function Social({ goCuradoria }: { goCuradoria: () => void }) {
   const [dirty, setDirty] = useState(false);
   const [drag, setDrag] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [posting, setPosting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
 
@@ -133,11 +134,31 @@ export function Social({ goCuradoria }: { goCuradoria: () => void }) {
     setExportMsg(null);
     try {
       const r = await api.exportSocial(slug, sel.id);
-      setExportMsg(`Saved to ${r.dir}/`);
+      setExportMsg(`Saved to ${r.folder || r.dir}/`);
     } catch (e: any) {
       setExportMsg(`Error: ${e.body?.stderr || e.message || e}`);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const postToInstagram = async () => {
+    if (!sel || sel.slides.length === 0) return;
+    // gesture-bound steps first so the browser does not block them
+    if (sel.caption.trim()) navigator.clipboard.writeText(sel.caption).catch(() => {});
+    window.open("https://www.instagram.com/", "_blank", "noopener");
+    setPosting(true);
+    setExportMsg(null);
+    try {
+      if (dirty) await api.putSocial(slug, social);
+      await api.exportSocial(slug, sel.id);
+      try { await api.revealSocial(slug, sel.id); } catch {}
+      const n = sel.slides.length;
+      setExportMsg(`${n} slide${n === 1 ? "" : "s"} exported and the folder opened. Caption copied. In the Instagram tab, start a new post, drag the slides in order and paste the caption.`);
+    } catch (e: any) {
+      setExportMsg(`Error: ${e.body?.stderr || e.message || e}`);
+    } finally {
+      setPosting(false);
     }
   };
 
@@ -198,8 +219,11 @@ export function Social({ goCuradoria }: { goCuradoria: () => void }) {
             >
               {saveStatus === "saving" ? "Saving…" : dirty ? "Save" : "Saved ✓"}
             </button>
-            <button className="btn-gold sm" onClick={doExport} disabled={exporting || sel.slides.length === 0}>
-              {exporting ? "Exporting…" : "Export carousel"}
+            <button className="btn-ghost sm dark" onClick={doExport} disabled={exporting || posting || sel.slides.length === 0}>
+              {exporting ? "Exporting…" : "Export"}
+            </button>
+            <button className="social-ig" onClick={postToInstagram} disabled={posting || exporting || sel.slides.length === 0}>
+              {posting ? "Preparing…" : "Post to Instagram"}
             </button>
           </div>
           {exportMsg && <p className="social-export-msg">{exportMsg}</p>}

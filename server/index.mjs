@@ -285,7 +285,21 @@ app.post("/api/trips/:slug/social/export", withTrip, async (req, res) => {
   if (id) args.push(id);
   const r = await runScript(process.execPath, args);
   if (r.code !== 0) return res.status(500).json({ error: "render_failed", log: r.out, stderr: r.err });
-  res.json({ ok: true, log: r.out, dir: `trips/${req.params.slug}/social` });
+  const index = readJSON(path.join(req.tp.socialDir, "index.json")) || {};
+  res.json({ ok: true, log: r.out, dir: `trips/${req.params.slug}/social`, folder: id ? index[id] : undefined });
+});
+
+// reveal an exported carousel folder in Finder (macOS)
+app.post("/api/trips/:slug/social/reveal", withTrip, (req, res) => {
+  const id = String(req.body?.id || "");
+  const index = readJSON(path.join(req.tp.socialDir, "index.json")) || {};
+  const rel = index[id];
+  if (!rel) return res.status(404).json({ error: "not_exported" });
+  const abs = path.resolve(ROOT, rel);
+  if (!abs.startsWith(req.tp.socialDir)) return res.status(400).json({ error: "bad_path" });
+  if (!fs.existsSync(abs)) return res.status(404).json({ error: "missing" });
+  spawn("open", [abs]);
+  res.json({ ok: true });
 });
 
 // ---- export --------------------------------------------------------------
