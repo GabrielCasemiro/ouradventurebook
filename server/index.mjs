@@ -7,6 +7,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import multer from "multer";
 import { ROOT, PYTHON, tripPaths, readJSON, readConfig, listTrips, listTripSlugs, SLUG_RE } from "../trips-lib.mjs";
+import { analyzeLibrary } from "../discover.mjs";
 
 const PORT = Number(process.env.PORT) || 4321;
 const app = express();
@@ -102,6 +103,145 @@ app.get("/trips/:slug/photo/:uuid", withTrip, (req, res) => {
   if (fs.existsSync(web)) return res.sendFile(web);
   if (fs.existsSync(thumb)) return res.sendFile(thumb);
   res.status(404).end();
+});
+
+// ---- trip discovery (suggest trips from the Photos library) ---------------
+const DISCOVERY_DIR = path.join(ROOT, "data", "discovery");
+const DISCOVERY_SETTINGS = path.join(DISCOVERY_DIR, "settings.json");
+const DISCOVERY_LIB = path.join(DISCOVERY_DIR, "library.tsv");
+// Only the fields we need, one short line per photo — far smaller and faster
+// than a full --json dump (which serializes every field for every photo).
+const DISCOVERY_TEMPLATE =
+  "{created.date}{tab}{photo.latitude,}{tab}{photo.longitude,}{tab}{place.country_code,}{tab}{place.name.country,}{tab}{place.name.city,}{tab}{place.name.area_of_interest,}";
+
+let syncState = { running: false, done: 0, total: 0, status: "", startedAt: 0, sizeMB: 0, error: null };
+
+const isoDay = (d) => d.toISOString().slice(0, 10);
+const discoveryDefaults = () => {
+  const to = new Date();
+  const from = new Date(); from.setFullYear(from.getFullYear() - 3);
+  return { from: isoDay(from), to: isoDay(to), homeKey: null };
+};
+const discoverySettings = () => ({ ...discoveryDefaults(), ...(readJSON(DISCOVERY_SETTINGS) || {}) });
+const discoveryCommand = (s) =>
+  `cd ${ROOT} && mkdir -p data/discovery && ` +
+  `osxphotos query --from-date ${s.from} --to-date ${s.to} --quiet --print "${DISCOVERY_TEMPLATE}" > data/discovery/library.tsv`;
+
+// parse the compact TSV (or a legacy JSON dump) into records for analyzeLibrary
+function readDiscoveryLibrary() {
+  const text = fs.readFileSync(DISCOVERY_LIB, "utf8");
+  if (text.trimStart().startsWith("[")) {
+    const arr = JSON.parse(text.replace(/\bNaN\b/g, "null"));
+    return Array.isArray(arr) ? arr : arr?.photos || [];
+  }
+  const out = [];
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    const [date, lat, lon, cc, country, city, aoi] = line.split("\t");
+    out.push({ date, lat, lon, cc, country, city, aoi });
+  }
+  return out;
+}
+
+app.get("/api/discovery", (_req, res) => {
+  const s = discoverySettings();
+  let libraryInfo = null;
+  if (fs.existsSync(DISCOVERY_LIB)) {
+    const st = fs.statSync(DISCOVERY_LIB);
+    libraryInfo = { syncedAt: st.mtime.toISOString(), sizeMB: +(st.size / 1048576).toFixed(1) };
+  }
+  res.json({ settings: s, hasLibrary: !!libraryInfo, libraryInfo, command: discoveryCommand(s) });
+});
+
+app.put("/api/discovery", async (req, res) => {
+  const b = req.body || {};
+  const cur = discoverySettings();
+  const next = {
+    from: /^\d{4}-\d{2}-\d{2}$/.test(b.from) ? b.from : cur.from,
+    to: /^\d{4}-\d{2}-\d{2}$/.test(b.to) ? b.to : cur.to,
+    homeKey: typeof b.homeKey === "string" || b.homeKey === null ? b.homeKey : cur.homeKey,
+  };
+  await fsp.mkdir(DISCOVERY_DIR, { recursive: true });
+  await fsp.writeFile(DISCOVERY_SETTINGS, JSON.stringify(next, null, 2));
+  res.json({ ok: true, settings: next, command: discoveryCommand(next) });
+});
+
+// run osxphotos directly (works when the terminal running the server has Full
+// Disk Access). Streams the metadata JSON straight to data/discovery/library.json.
+app.get("/api/discovery/sync/progress", (_req, res) => {
+  const elapsed = syncState.running ? Date.now() - syncState.startedAt : 0;
+  res.json({ ...syncState, elapsed });
+});
+
+app.post("/api/discovery/sync", async (req, res) => {
+  const s = discoverySettings();
+  await fsp.mkdir(DISCOVERY_DIR, { recursive: true });
+  const out = fs.createWriteStream(DISCOVERY_LIB);
+  let err = "", sent = false, closedCode = null, fileDone = false;
+  syncState = { running: true, done: 0, total: 0, status: "Starting osxphotos…", startedAt: Date.now(), sizeMB: 0, error: null };
+  const stopState = (error = null) => { syncState = { ...syncState, running: false, error }; };
+  const fail = (body, status = 500) => { if (sent) return; sent = true; try { out.destroy(); } catch {} stopState(body.error || "failed"); res.status(status).json(body); };
+  const finish = () => {
+    if (sent || closedCode === null || !fileDone) return;
+    if (closedCode === 0) {
+      sent = true;
+      const st = fs.statSync(DISCOVERY_LIB);
+      stopState();
+      res.json({ ok: true, libraryInfo: { syncedAt: st.mtime.toISOString(), sizeMB: +(st.size / 1048576).toFixed(1) } });
+    } else {
+      const perm = /full disk access|not authorized|operation not permitted|unable to open|permission|photos library|osxphotos.db/i.test(err);
+      fail({ error: perm ? "permission" : "osxphotos_failed", code: closedCode, stderr: err.slice(-2000) });
+    }
+  };
+  // reflect how much has been written so far (some osxphotos versions stream)
+  const sizeTimer = setInterval(() => {
+    try { if (syncState.running) syncState.sizeMB = +(fs.statSync(DISCOVERY_LIB).size / 1048576).toFixed(1); } catch {}
+  }, 800);
+
+  let child;
+  try { child = spawn("osxphotos", ["query", "--from-date", s.from, "--to-date", s.to, "--quiet", "--print", DISCOVERY_TEMPLATE]); }
+  catch (e) { clearInterval(sizeTimer); return fail({ error: "not_found", message: String(e.message || e) }); }
+  child.on("error", (e) => { clearInterval(sizeTimer); fail({ error: e.code === "ENOENT" ? "not_found" : "spawn_failed", message: String(e.message || e) }); });
+  child.stdout.pipe(out);
+  child.stderr.on("data", (d) => {
+    err += d;
+    // parse the latest progress line osxphotos prints to stderr
+    const lines = String(d).split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
+    const last = lines[lines.length - 1];
+    if (last) {
+      const friendly = /done processing/i.test(last) ? "Almost done, writing metadata…"
+        : /processing/i.test(last) ? "Reading your library…" : last;
+      syncState.status = friendly.slice(0, 120);
+      const m = last.match(/(\d[\d,]*)\s*\/\s*(\d[\d,]*)/);
+      if (m) { syncState.done = +m[1].replace(/,/g, ""); syncState.total = +m[2].replace(/,/g, ""); }
+      else { const p = last.match(/(\d+)%/); if (p) { syncState.done = +p[1]; syncState.total = 100; } }
+    }
+  });
+  out.on("finish", () => { fileDone = true; clearInterval(sizeTimer); finish(); });
+  out.on("error", () => { clearInterval(sizeTimer); fail({ error: "write_failed" }); });
+  child.on("close", (code) => { closedCode = code; finish(); });
+});
+
+app.post("/api/discovery/analyze", async (req, res) => {
+  if (!fs.existsSync(DISCOVERY_LIB)) return res.status(400).json({ error: "no_library" });
+  let photos;
+  try { photos = readDiscoveryLibrary(); }
+  catch (e) { return res.status(500).json({ error: "bad_library", message: String(e.message || e) }); }
+
+  const s = discoverySettings();
+  const homeKey = typeof req.body?.homeKey === "string" ? req.body.homeKey : s.homeKey;
+  if (req.body?.homeKey !== undefined && req.body.homeKey !== s.homeKey) {
+    await fsp.mkdir(DISCOVERY_DIR, { recursive: true });
+    await fsp.writeFile(DISCOVERY_SETTINGS, JSON.stringify({ ...s, homeKey }, null, 2));
+  }
+
+  const existingRanges = listTrips().map((t) => {
+    const start = t.startDate;
+    const end = isoDay(new Date(Date.parse(start + "T00:00:00") + (t.days - 1) * 86400000));
+    return { start, end };
+  });
+  const result = analyzeLibrary(photos, { homeKey, existingRanges });
+  res.json({ ...result, count: photos.length });
 });
 
 // ---- list / create trips -------------------------------------------------

@@ -1,4 +1,4 @@
-import type { Manifest, Project, Social, TripConfig, TripSummary } from "./types";
+import type { DiscoveryInfo, DiscoveryResult, DiscoverySettings, Manifest, Project, Social, TripConfig, TripSummary } from "./types";
 
 const j = async (r: Response) => {
   if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status, body: await r.json().catch(() => ({})) });
@@ -11,6 +11,16 @@ export const api = {
   trips: (): Promise<TripSummary[]> => fetch("/api/trips").then(j),
   createTrip: (body: Partial<TripConfig>): Promise<{ ok: boolean; trip: TripConfig }> =>
     fetch("/api/trips", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(j),
+
+  getDiscovery: (): Promise<DiscoveryInfo> => fetch("/api/discovery").then(j),
+  putDiscovery: (body: Partial<DiscoverySettings>): Promise<{ ok: boolean; settings: DiscoverySettings; command: string }> =>
+    fetch("/api/discovery", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(j),
+  syncDiscovery: (): Promise<{ ok: boolean; libraryInfo: { syncedAt: string; sizeMB: number } }> =>
+    fetch("/api/discovery/sync", { method: "POST" }).then(j),
+  syncProgress: (): Promise<{ running: boolean; done: number; total: number; status: string; sizeMB: number; elapsed: number }> =>
+    fetch("/api/discovery/sync/progress").then(j),
+  analyzeDiscovery: (homeKey?: string | null): Promise<DiscoveryResult> =>
+    fetch("/api/discovery/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ homeKey }) }).then(j),
 
   config: (slug: string): Promise<TripConfig> => fetch(`${base(slug)}/config`).then(j),
   updateConfig: (slug: string, patch: Partial<TripConfig>): Promise<{ ok: boolean; trip: TripConfig }> =>
