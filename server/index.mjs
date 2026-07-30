@@ -108,7 +108,11 @@ app.get("/trips/:slug/photo/:uuid", withTrip, (req, res) => {
 // ---- trip discovery (suggest trips from the Photos library) ---------------
 const DISCOVERY_DIR = path.join(ROOT, "data", "discovery");
 const DISCOVERY_SETTINGS = path.join(DISCOVERY_DIR, "settings.json");
-const DISCOVERY_LIB = path.join(DISCOVERY_DIR, "library.json");
+const DISCOVERY_LIB = path.join(DISCOVERY_DIR, "library.tsv");
+// Only the fields we need, one short line per photo — far smaller and faster
+// than a full --json dump (which serializes every field for every photo).
+const DISCOVERY_TEMPLATE =
+  "{created.date}{tab}{photo.latitude,}{tab}{photo.longitude,}{tab}{place.country_code,}{tab}{place.name.country,}{tab}{place.name.city,}";
 
 let syncState = { running: false, done: 0, total: 0, status: "", startedAt: 0, sizeMB: 0, error: null };
 
@@ -121,7 +125,23 @@ const discoveryDefaults = () => {
 const discoverySettings = () => ({ ...discoveryDefaults(), ...(readJSON(DISCOVERY_SETTINGS) || {}) });
 const discoveryCommand = (s) =>
   `cd ${ROOT} && mkdir -p data/discovery && ` +
-  `osxphotos query --from-date ${s.from} --to-date ${s.to} --json > data/discovery/library.json`;
+  `osxphotos query --from-date ${s.from} --to-date ${s.to} --quiet --print "${DISCOVERY_TEMPLATE}" > data/discovery/library.tsv`;
+
+// parse the compact TSV (or a legacy JSON dump) into records for analyzeLibrary
+function readDiscoveryLibrary() {
+  const text = fs.readFileSync(DISCOVERY_LIB, "utf8");
+  if (text.trimStart().startsWith("[")) {
+    const arr = JSON.parse(text.replace(/\bNaN\b/g, "null"));
+    return Array.isArray(arr) ? arr : arr?.photos || [];
+  }
+  const out = [];
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    const [date, lat, lon, cc, country, city] = line.split("\t");
+    out.push({ date, lat, lon, cc, country, city });
+  }
+  return out;
+}
 
 app.get("/api/discovery", (_req, res) => {
   const s = discoverySettings();
@@ -179,7 +199,7 @@ app.post("/api/discovery/sync", async (req, res) => {
   }, 800);
 
   let child;
-  try { child = spawn("osxphotos", ["query", "--from-date", s.from, "--to-date", s.to, "--json"]); }
+  try { child = spawn("osxphotos", ["query", "--from-date", s.from, "--to-date", s.to, "--quiet", "--print", DISCOVERY_TEMPLATE]); }
   catch (e) { clearInterval(sizeTimer); return fail({ error: "not_found", message: String(e.message || e) }); }
   child.on("error", (e) => { clearInterval(sizeTimer); fail({ error: e.code === "ENOENT" ? "not_found" : "spawn_failed", message: String(e.message || e) }); });
   child.stdout.pipe(out);
@@ -189,7 +209,9 @@ app.post("/api/discovery/sync", async (req, res) => {
     const lines = String(d).split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
     const last = lines[lines.length - 1];
     if (last) {
-      syncState.status = last.slice(0, 120);
+      const friendly = /done processing/i.test(last) ? "Almost done, writing metadata…"
+        : /processing/i.test(last) ? "Reading your library…" : last;
+      syncState.status = friendly.slice(0, 120);
       const m = last.match(/(\d[\d,]*)\s*\/\s*(\d[\d,]*)/);
       if (m) { syncState.done = +m[1].replace(/,/g, ""); syncState.total = +m[2].replace(/,/g, ""); }
       else { const p = last.match(/(\d+)%/); if (p) { syncState.done = +p[1]; syncState.total = 100; } }
@@ -203,9 +225,8 @@ app.post("/api/discovery/sync", async (req, res) => {
 app.post("/api/discovery/analyze", async (req, res) => {
   if (!fs.existsSync(DISCOVERY_LIB)) return res.status(400).json({ error: "no_library" });
   let photos;
-  try { photos = JSON.parse(fs.readFileSync(DISCOVERY_LIB, "utf8").replace(/\bNaN\b/g, "null")); }
+  try { photos = readDiscoveryLibrary(); }
   catch (e) { return res.status(500).json({ error: "bad_library", message: String(e.message || e) }); }
-  if (!Array.isArray(photos)) photos = photos?.photos || [];
 
   const s = discoverySettings();
   const homeKey = typeof req.body?.homeKey === "string" ? req.body.homeKey : s.homeKey;

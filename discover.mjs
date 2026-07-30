@@ -21,8 +21,17 @@ const firstName = (place, key) => {
   return Array.isArray(v) && v[0] ? String(v[0]) : null;
 };
 
-// Turn one raw osxphotos record into a compact { day, lat, lon, cc, country, city }.
+// Turn one record into a compact { day, lat, lon, cc, country, city }.
+// Accepts both the tiny --print/--field shape ({date,lat,lon,cc,country,city})
+// and a full osxphotos --json object (fallback).
 export const parseRecord = (p) => {
+  if (!p) return null;
+  if ("lat" in p || "lon" in p || "cc" in p) {
+    if (!p.date) return null;
+    const lat = toNum(parseFloat(p.lat)), lon = toNum(parseFloat(p.lon));
+    const cc = (p.cc || "").toUpperCase() || null;
+    return { day: String(p.date).slice(0, 10), lat, lon, cc, country: p.country || null, city: p.city || null, hasGps: lat != null && lon != null };
+  }
   const date = p?.date || p?.created || null;
   if (!date) return null;
   const place = p?.place || {};
