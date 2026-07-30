@@ -16,6 +16,30 @@ export const haversineKm = (aLat, aLon, bLat, bLon) => {
 export const flagEmoji = (cc) =>
   cc && cc.length === 2 ? String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 127397 + c.charCodeAt(0))) : "";
 
+// canonical country name from ISO code, so "Brasil"/"Brazil" collapse to one
+let _regionNames = null;
+export const countryName = (cc, fallback = null) => {
+  if (!cc) return fallback;
+  try {
+    if (!_regionNames) _regionNames = new Intl.DisplayNames(["en"], { type: "region" });
+    return _regionNames.of(cc.toUpperCase()) || fallback || cc;
+  } catch { return fallback || cc; }
+};
+
+// best-effort thematic emoji from place text (city + area of interest); flag is the fallback
+const THEMES = [
+  [/praia|beach|costa|litoral|seaside|\bbay\b|ba[ií]a|ilha|island|dunas?/i, "🌊"],
+  [/serra|montanh|mountain|\bpico\b|alpes|alps|cordilheira/i, "⛰️"],
+  [/neve|\bsnow\b|\bski\b|esqui/i, "🎿"],
+  [/cachoeira|waterfall|catarata/i, "💧"],
+  [/lago|\blake\b|lagoa/i, "🏞️"],
+  [/deserto|desert/i, "🏜️"],
+  [/floresta|forest|selva|jungle|amaz/i, "🌳"],
+  [/parque|\bpark\b|trilha|\btrail\b/i, "🥾"],
+  [/vinh|vineyard|winery/i, "🍷"],
+];
+export const themeEmoji = (text) => { for (const [re, e] of THEMES) if (re.test(text || "")) return e; return null; };
+
 const firstName = (place, key) => {
   const v = place?.names?.[key];
   return Array.isArray(v) && v[0] ? String(v[0]) : null;
@@ -30,7 +54,7 @@ export const parseRecord = (p) => {
     if (!p.date) return null;
     const lat = toNum(parseFloat(p.lat)), lon = toNum(parseFloat(p.lon));
     const cc = (p.cc || "").toUpperCase() || null;
-    return { day: String(p.date).slice(0, 10), lat, lon, cc, country: p.country || null, city: p.city || null, hasGps: lat != null && lon != null };
+    return { day: String(p.date).slice(0, 10), lat, lon, cc, country: p.country || null, city: p.city || null, aoi: p.aoi || null, hasGps: lat != null && lon != null };
   }
   const date = p?.date || p?.created || null;
   if (!date) return null;
@@ -44,14 +68,19 @@ export const parseRecord = (p) => {
     country: firstName(place, "country") || null,
     city: firstName(place, "city") || firstName(place, "locality") ||
           firstName(place, "sub_administrative_area") || firstName(place, "state_province") || null,
+    aoi: firstName(place, "area_of_interest") || null,
     hasGps: lat != null && lon != null,
   };
 };
 
+// key by country CODE (not the localized name) so Brasil/Brazil collapse to one
 const clusterKey = (r) =>
-  r.city ? `${r.city}|${r.country || r.cc || ""}` : (r.country || r.cc || `@${r.lat?.toFixed(1)},${r.lon?.toFixed(1)}`);
+  r.city ? `${r.city}|${r.cc || r.country || ""}` : (r.cc || r.country || `@${r.lat?.toFixed(1)},${r.lon?.toFixed(1)}`);
 
-const clusterLabel = (r) => r.city && r.country ? `${r.city}, ${r.country}` : (r.city || r.country || r.cc || "Unknown");
+const clusterLabel = (r) => {
+  const country = countryName(r.cc, r.country);
+  return r.city && country ? `${r.city}, ${country}` : (r.city || country || r.cc || "Unknown");
+};
 
 // Build location clusters (for home detection and the home override list).
 const buildClusters = (recs) => {
@@ -132,12 +161,14 @@ export function analyzeLibrary(rawPhotos, opts = {}) {
       return Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
     };
     const cc = countBy("cc");
-    const country = countBy("country");
+    const country = countryName(cc, countBy("country"));
     const city = countBy("city");
     const international = cc && home.cc ? cc !== home.cc : (country && home.country ? country !== home.country : false);
     const title = international ? (country || city || "Trip") : (city || country || "Trip");
     const kicker = international ? (city || country || "") : (country && country !== title ? country : "");
-    const emoji = international && cc ? flagEmoji(cc) : "📍";
+    // thematic emoji if the place hints at one (beach, mountains…), else the country flag
+    const placeText = [...new Set(away.map((r) => [r.city, r.aoi].filter(Boolean).join(" ")))].join(" ");
+    const emoji = themeEmoji(placeText) || flagEmoji(cc) || "🌍";
     if (overlaps(g.start, g.end)) continue;
     suggestions.push({
       start: g.start,

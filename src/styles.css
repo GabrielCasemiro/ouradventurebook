@@ -740,6 +740,8 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 .disc-home select { font: inherit; padding: 7px 10px; border: 1px solid var(--paper-2); border-radius: 9px; background: #fff; color: var(--ink); text-transform: none; letter-spacing: 0; font-weight: 500; }
 
 .disc-suggestions { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+.disc-suggestions-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.disc-suggestions-head span { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-soft); }
 .disc-card { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; background: var(--paper-2); }
 .disc-emoji { font-size: 26px; flex: none; width: 34px; text-align: center; }
 .disc-meta { flex: 1; min-width: 0; }

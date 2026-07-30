@@ -112,6 +112,7 @@ function DiscoverTrips({ onClose, onCreated }: { onClose: () => void; onCreated:
   const [showManual, setShowManual] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [created, setCreated] = useState<Record<string, "done" | "busy" | string>>({});
+  const [creatingAll, setCreatingAll] = useState(false);
 
   useEffect(() => {
     api.getDiscovery().then((i) => {
@@ -165,6 +166,16 @@ function DiscoverTrips({ onClose, onCreated }: { onClose: () => void; onCreated:
 
   const copy = () => {
     if (info?.command) navigator.clipboard.writeText(info.command).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+  };
+
+  const createAll = async () => {
+    if (!result) return;
+    setCreatingAll(true);
+    for (const s of result.suggestions) {
+      if (created[s.start] === "done" || created[s.start] === "busy") continue;
+      await create(s);
+    }
+    setCreatingAll(false);
   };
 
   const create = async (s: DiscoverySuggestion) => {
@@ -244,6 +255,12 @@ function DiscoverTrips({ onClose, onCreated }: { onClose: () => void; onCreated:
 
         {result && (
           <div className="disc-suggestions">
+            {result.suggestions.length > 0 && (
+              <div className="disc-suggestions-head">
+                <span>{result.suggestions.length} trip{result.suggestions.length === 1 ? "" : "s"} found</span>
+                <button className="btn-ghost sm" onClick={createAll} disabled={creatingAll}>{creatingAll ? "Creating…" : "Create all"}</button>
+              </div>
+            )}
             {result.suggestions.length === 0 && <p className="muted">No trips found in this range. Try widening the dates, or pick a different home base.</p>}
             {result.suggestions.map((s) => {
               const st = created[s.start];

@@ -112,7 +112,7 @@ const DISCOVERY_LIB = path.join(DISCOVERY_DIR, "library.tsv");
 // Only the fields we need, one short line per photo — far smaller and faster
 // than a full --json dump (which serializes every field for every photo).
 const DISCOVERY_TEMPLATE =
-  "{created.date}{tab}{photo.latitude,}{tab}{photo.longitude,}{tab}{place.country_code,}{tab}{place.name.country,}{tab}{place.name.city,}";
+  "{created.date}{tab}{photo.latitude,}{tab}{photo.longitude,}{tab}{place.country_code,}{tab}{place.name.country,}{tab}{place.name.city,}{tab}{place.name.area_of_interest,}";
 
 let syncState = { running: false, done: 0, total: 0, status: "", startedAt: 0, sizeMB: 0, error: null };
 
@@ -137,8 +137,8 @@ function readDiscoveryLibrary() {
   const out = [];
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
-    const [date, lat, lon, cc, country, city] = line.split("\t");
-    out.push({ date, lat, lon, cc, country, city });
+    const [date, lat, lon, cc, country, city, aoi] = line.split("\t");
+    out.push({ date, lat, lon, cc, country, city, aoi });
   }
   return out;
 }
