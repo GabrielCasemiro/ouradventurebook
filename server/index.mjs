@@ -7,6 +7,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import multer from "multer";
 import { ROOT, PYTHON, tripPaths, readJSON, readConfig, listTrips, listTripSlugs, SLUG_RE } from "../trips-lib.mjs";
+import { analyzeLibrary } from "../discover.mjs";
 
 const PORT = Number(process.env.PORT) || 4321;
 const app = express();
@@ -102,6 +103,68 @@ app.get("/trips/:slug/photo/:uuid", withTrip, (req, res) => {
   if (fs.existsSync(web)) return res.sendFile(web);
   if (fs.existsSync(thumb)) return res.sendFile(thumb);
   res.status(404).end();
+});
+
+// ---- trip discovery (suggest trips from the Photos library) ---------------
+const DISCOVERY_DIR = path.join(ROOT, "data", "discovery");
+const DISCOVERY_SETTINGS = path.join(DISCOVERY_DIR, "settings.json");
+const DISCOVERY_LIB = path.join(DISCOVERY_DIR, "library.json");
+
+const isoDay = (d) => d.toISOString().slice(0, 10);
+const discoveryDefaults = () => {
+  const to = new Date();
+  const from = new Date(); from.setFullYear(from.getFullYear() - 3);
+  return { from: isoDay(from), to: isoDay(to), homeKey: null };
+};
+const discoverySettings = () => ({ ...discoveryDefaults(), ...(readJSON(DISCOVERY_SETTINGS) || {}) });
+const discoveryCommand = (s) =>
+  `cd ${ROOT} && mkdir -p data/discovery && ` +
+  `osxphotos query --from-date ${s.from} --to-date ${s.to} --json > data/discovery/library.json`;
+
+app.get("/api/discovery", (_req, res) => {
+  const s = discoverySettings();
+  let libraryInfo = null;
+  if (fs.existsSync(DISCOVERY_LIB)) {
+    const st = fs.statSync(DISCOVERY_LIB);
+    libraryInfo = { syncedAt: st.mtime.toISOString(), sizeMB: +(st.size / 1048576).toFixed(1) };
+  }
+  res.json({ settings: s, hasLibrary: !!libraryInfo, libraryInfo, command: discoveryCommand(s) });
+});
+
+app.put("/api/discovery", async (req, res) => {
+  const b = req.body || {};
+  const cur = discoverySettings();
+  const next = {
+    from: /^\d{4}-\d{2}-\d{2}$/.test(b.from) ? b.from : cur.from,
+    to: /^\d{4}-\d{2}-\d{2}$/.test(b.to) ? b.to : cur.to,
+    homeKey: typeof b.homeKey === "string" || b.homeKey === null ? b.homeKey : cur.homeKey,
+  };
+  await fsp.mkdir(DISCOVERY_DIR, { recursive: true });
+  await fsp.writeFile(DISCOVERY_SETTINGS, JSON.stringify(next, null, 2));
+  res.json({ ok: true, settings: next, command: discoveryCommand(next) });
+});
+
+app.post("/api/discovery/analyze", async (req, res) => {
+  if (!fs.existsSync(DISCOVERY_LIB)) return res.status(400).json({ error: "no_library" });
+  let photos;
+  try { photos = JSON.parse(fs.readFileSync(DISCOVERY_LIB, "utf8").replace(/\bNaN\b/g, "null")); }
+  catch (e) { return res.status(500).json({ error: "bad_library", message: String(e.message || e) }); }
+  if (!Array.isArray(photos)) photos = photos?.photos || [];
+
+  const s = discoverySettings();
+  const homeKey = typeof req.body?.homeKey === "string" ? req.body.homeKey : s.homeKey;
+  if (req.body?.homeKey !== undefined && req.body.homeKey !== s.homeKey) {
+    await fsp.mkdir(DISCOVERY_DIR, { recursive: true });
+    await fsp.writeFile(DISCOVERY_SETTINGS, JSON.stringify({ ...s, homeKey }, null, 2));
+  }
+
+  const existingRanges = listTrips().map((t) => {
+    const start = t.startDate;
+    const end = isoDay(new Date(Date.parse(start + "T00:00:00") + (t.days - 1) * 86400000));
+    return { start, end };
+  });
+  const result = analyzeLibrary(photos, { homeKey, existingRanges });
+  res.json({ ...result, count: photos.length });
 });
 
 // ---- list / create trips -------------------------------------------------

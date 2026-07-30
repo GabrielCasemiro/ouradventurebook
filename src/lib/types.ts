@@ -66,6 +66,24 @@ export interface Project {
   updatedAt: string | null;
 }
 
+export interface DiscoverySuggestion {
+  start: string; end: string; days: number; photos: number;
+  title: string; kicker: string; emoji: string;
+  country: string | null; city: string | null; cc: string | null; international: boolean;
+}
+export interface DiscoveryCluster {
+  key: string; label: string; days: number; photos: number;
+  cc: string | null; country: string | null; city: string | null; lat: number; lon: number;
+}
+export interface DiscoverySettings { from: string; to: string; homeKey: string | null; }
+export interface DiscoveryInfo {
+  settings: DiscoverySettings; hasLibrary: boolean;
+  libraryInfo: { syncedAt: string; sizeMB: number } | null; command: string;
+}
+export interface DiscoveryResult {
+  home: DiscoveryCluster | null; clusters: DiscoveryCluster[]; suggestions: DiscoverySuggestion[]; count: number;
+}
+
 export type SocialFormat = "4x5" | "1x1" | "9x16";
 
 export interface Carousel {
