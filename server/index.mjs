@@ -144,6 +144,37 @@ app.put("/api/discovery", async (req, res) => {
   res.json({ ok: true, settings: next, command: discoveryCommand(next) });
 });
 
+// run osxphotos directly (works when the terminal running the server has Full
+// Disk Access). Streams the metadata JSON straight to data/discovery/library.json.
+app.post("/api/discovery/sync", async (req, res) => {
+  const s = discoverySettings();
+  await fsp.mkdir(DISCOVERY_DIR, { recursive: true });
+  const out = fs.createWriteStream(DISCOVERY_LIB);
+  let err = "", sent = false, closedCode = null, fileDone = false;
+  const fail = (body, status = 500) => { if (sent) return; sent = true; try { out.destroy(); } catch {} res.status(status).json(body); };
+  const finish = () => {
+    if (sent || closedCode === null || !fileDone) return;
+    if (closedCode === 0) {
+      sent = true;
+      const st = fs.statSync(DISCOVERY_LIB);
+      res.json({ ok: true, libraryInfo: { syncedAt: st.mtime.toISOString(), sizeMB: +(st.size / 1048576).toFixed(1) } });
+    } else {
+      const perm = /full disk access|not authorized|operation not permitted|unable to open|permission|photos library|osxphotos.db/i.test(err);
+      fail({ error: perm ? "permission" : "osxphotos_failed", code: closedCode, stderr: err.slice(-2000) });
+    }
+  };
+
+  let child;
+  try { child = spawn("osxphotos", ["query", "--from-date", s.from, "--to-date", s.to, "--json"]); }
+  catch (e) { return fail({ error: "not_found", message: String(e.message || e) }); }
+  child.on("error", (e) => fail({ error: e.code === "ENOENT" ? "not_found" : "spawn_failed", message: String(e.message || e) }));
+  child.stdout.pipe(out);
+  child.stderr.on("data", (d) => (err += d));
+  out.on("finish", () => { fileDone = true; finish(); });
+  out.on("error", () => fail({ error: "write_failed" }));
+  child.on("close", (code) => { closedCode = code; finish(); });
+});
+
 app.post("/api/discovery/analyze", async (req, res) => {
   if (!fs.existsSync(DISCOVERY_LIB)) return res.status(400).json({ error: "no_library" });
   let photos;

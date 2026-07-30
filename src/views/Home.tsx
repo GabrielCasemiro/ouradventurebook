@@ -105,7 +105,9 @@ function DiscoverTrips({ onClose, onCreated }: { onClose: () => void; onCreated:
   const [info, setInfo] = useState<DiscoveryInfo | null>(null);
   const [result, setResult] = useState<DiscoveryResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showManual, setShowManual] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [created, setCreated] = useState<Record<string, "done" | "busy" | string>>({});
 
@@ -127,6 +129,28 @@ function DiscoverTrips({ onClose, onCreated }: { onClose: () => void; onCreated:
   const setRange = async (from: string, to: string) => {
     const r = await api.putDiscovery({ from, to });
     setInfo((prev) => (prev ? { ...prev, settings: r.settings, command: r.command } : prev));
+  };
+
+  const syncNow = async () => {
+    setSyncing(true); setMsg(null);
+    try {
+      const r = await api.syncDiscovery();
+      setInfo((prev) => (prev ? { ...prev, hasLibrary: true, libraryInfo: r.libraryInfo } : prev));
+      await analyze(result?.home?.key ?? info?.settings.homeKey);
+    } catch (e: any) {
+      if (e.body?.error === "permission") {
+        setShowManual(true);
+        setMsg("Your terminal doesn't have Full Disk Access, so the app can't read Photos. Grant it in System Settings › Privacy & Security › Full Disk Access (add your terminal), restart the terminal, then try again — or run the command below yourself.");
+      } else if (e.body?.error === "not_found") {
+        setMsg("osxphotos isn't installed or isn't on the PATH. Run `npm run setup`, or use the manual command below.");
+        setShowManual(true);
+      } else {
+        setMsg(e.body?.stderr || e.message || String(e));
+        setShowManual(true);
+      }
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const copy = () => {
@@ -159,13 +183,28 @@ function DiscoverTrips({ onClose, onCreated }: { onClose: () => void; onCreated:
             <label>To<input type="date" value={info?.settings.to || ""} onChange={(e) => info && setRange(info.settings.from, e.target.value)} /></label>
             {info?.libraryInfo && <span className="disc-synced">last synced {new Date(info.libraryInfo.syncedAt).toLocaleDateString()} · {info.libraryInfo.sizeMB} MB</span>}
           </div>
-          <div className="cmd">
-            <code>{info?.command || "…"}</code>
-            <button className="btn-copy" onClick={copy}>{copied ? "copied ✓" : "copy"}</button>
+          <div className="disc-sync-actions">
+            <button className="btn-primary" onClick={syncNow} disabled={syncing || analyzing}>
+              {syncing ? "Syncing your library…" : info?.hasLibrary ? "Sync again" : "Sync now"}
+            </button>
+            {info?.hasLibrary && (
+              <button className="btn-ghost" onClick={() => analyze(result?.home?.key ?? info?.settings.homeKey)} disabled={syncing || analyzing}>
+                {analyzing ? "Analyzing…" : "Re-analyze"}
+              </button>
+            )}
+            <button className="disc-manual-toggle" onClick={() => setShowManual((v) => !v)}>
+              {showManual ? "hide manual command" : "run it manually"}
+            </button>
           </div>
-          <button className="btn-primary" onClick={() => analyze(result?.home?.key ?? info?.settings.homeKey)} disabled={analyzing}>
-            {analyzing ? "Analyzing…" : info?.hasLibrary ? "Re-analyze" : "I synced — find trips"}
-          </button>
+          {showManual && (
+            <div className="disc-manual">
+              <p className="muted">Runs the same command in your terminal, then click Re-analyze:</p>
+              <div className="cmd">
+                <code>{info?.command || "…"}</code>
+                <button className="btn-copy" onClick={copy}>{copied ? "copied ✓" : "copy"}</button>
+              </div>
+            </div>
+          )}
         </div>
 
         {msg && <p className="err-msg">{msg}</p>}

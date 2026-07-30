@@ -15,6 +15,8 @@ export const api = {
   getDiscovery: (): Promise<DiscoveryInfo> => fetch("/api/discovery").then(j),
   putDiscovery: (body: Partial<DiscoverySettings>): Promise<{ ok: boolean; settings: DiscoverySettings; command: string }> =>
     fetch("/api/discovery", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(j),
+  syncDiscovery: (): Promise<{ ok: boolean; libraryInfo: { syncedAt: string; sizeMB: number } }> =>
+    fetch("/api/discovery/sync", { method: "POST" }).then(j),
   analyzeDiscovery: (homeKey?: string | null): Promise<DiscoveryResult> =>
     fetch("/api/discovery/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ homeKey }) }).then(j),
 
