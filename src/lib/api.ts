@@ -13,6 +13,8 @@ export const api = {
     fetch("/api/trips", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(j),
 
   config: (slug: string): Promise<TripConfig> => fetch(`${base(slug)}/config`).then(j),
+  updateConfig: (slug: string, patch: Partial<TripConfig>): Promise<{ ok: boolean; trip: TripConfig }> =>
+    fetch(`${base(slug)}/config`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) }).then(j),
   manifest: (slug: string): Promise<Manifest> => fetch(`${base(slug)}/manifest`).then(j),
   getProject: (slug: string): Promise<Project> => fetch(`${base(slug)}/project`).then(j),
   putProject: (slug: string, p: Project): Promise<{ ok: boolean; updatedAt: string }> =>

@@ -40,6 +40,7 @@ export function App({ slug }: { slug: string }) {
   const [activeDay, setActiveDay] = useState(1);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [showExport, setShowExport] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   const timerRef = useRef<number | null>(null);
 
@@ -140,6 +141,7 @@ export function App({ slug }: { slug: string }) {
               <Metric value={`${sheetsUsed}/${project.album.sheets.length}`} label="sheets" />
             </div>
             <SaveBadge status={saveStatus} />
+            <button className="btn-ghost sm" onClick={() => setShowEdit(true)} title="Edit trip details">✎ Edit</button>
             <a className="btn-ghost sm" href={`/albuns/${slug}`} target="_blank" rel="noreferrer">Digital album ↗</a>
             <button className="btn-gold" onClick={() => setShowExport(true)}>Export</button>
           </div>
@@ -156,6 +158,7 @@ export function App({ slug }: { slug: string }) {
         </main>
 
         {showExport && <ExportPanel onClose={() => setShowExport(false)} />}
+        {showEdit && <EditTrip config={config} onClose={() => setShowEdit(false)} onSaved={(c) => { setConfig(c); setShowEdit(false); }} />}
       </div>
     </Ctx.Provider>
   );
@@ -180,4 +183,60 @@ function Splash() {
 
 function ErrorScreen({ msg }: { msg: string }) {
   return <div className="setup"><div className="setup-card"><h2>Oops</h2><p>{msg}</p><p className="setup-hint"><a href="/">← all trips</a></p></div></div>;
+}
+
+const ytId = (s: string) => {
+  const t = s.trim();
+  if (!t) return "";
+  const m = t.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{11}$/.test(t) ? t : t;
+};
+
+function EditTrip({ config, onClose, onSaved }: { config: TripConfig; onClose: () => void; onSaved: (c: TripConfig) => void }) {
+  const end0 = new Date(Date.parse(config.startDate + "T00:00:00") + (config.days - 1) * 86400000).toISOString().slice(0, 10);
+  const [title, setTitle] = useState(config.title);
+  const [kicker, setKicker] = useState(config.kicker || "");
+  const [emoji, setEmoji] = useState(config.emoji || "✦");
+  const [start, setStart] = useState(config.startDate);
+  const [end, setEnd] = useState(end0);
+  const [sheets, setSheets] = useState(config.sheets);
+  const [music, setMusic] = useState(config.music || "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const valid = !!title && !!start && !!end && Date.parse(end) >= Date.parse(start);
+  const save = async () => {
+    if (!valid) return;
+    setBusy(true); setErr(null);
+    try {
+      const days = Math.max(1, Math.round((Date.parse(end) - Date.parse(start)) / 86400000) + 1);
+      const r = await api.updateConfig(config.slug, { title, kicker, emoji, startDate: start, days, sheets, music: ytId(music) || null });
+      onSaved(r.trip);
+    } catch (e: any) { setErr(e.message || String(e)); setBusy(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>✕</button>
+        <h2>Edit trip</h2>
+        <div className="nt-grid">
+          <label>Title<input value={title} onChange={(e) => setTitle(e.target.value)} /></label>
+          <label>Subtitle (place)<input value={kicker} onChange={(e) => setKicker(e.target.value)} placeholder="Chile" /></label>
+          <label>Emoji<input value={emoji} onChange={(e) => setEmoji(e.target.value)} maxLength={4} /></label>
+          <label>Album sheets<input type="number" min={1} max={200} value={sheets} onChange={(e) => setSheets(+e.target.value)} /></label>
+          <label>Start<input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+          <label>End<input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+          <label className="nt-wide">Background music (YouTube link or ID, optional)<input value={music} onChange={(e) => setMusic(e.target.value)} placeholder="https://youtube.com/watch?v=…" /></label>
+        </div>
+        <p className="nt-slug">address: <code>/trip/{config.slug}</code> (fixed)</p>
+        {start !== config.startDate && <p className="warn-line">⚠ Changing the start date shifts the day labels; photos already imported keep their original day.</p>}
+        {err && <p className="err-msg">{err}</p>}
+        <div className="modal-foot">
+          <button className="btn-primary" onClick={save} disabled={!valid || busy}>{busy ? "saving…" : "Save changes"}</button>
+        </div>
+      </div>
+    </div>
+  );
 }

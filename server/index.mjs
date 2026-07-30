@@ -142,6 +142,20 @@ app.post("/api/trips", async (req, res) => {
 
 app.get("/api/trips/:slug/config", withTrip, (req, res) => res.json(req.cfg));
 
+app.put("/api/trips/:slug/config", withTrip, async (req, res) => {
+  const b = req.body || {};
+  const next = { ...req.cfg };
+  if (typeof b.title === "string") next.title = b.title.slice(0, 120);
+  if (typeof b.kicker === "string") next.kicker = b.kicker.slice(0, 60);
+  if (typeof b.emoji === "string") next.emoji = b.emoji.slice(0, 8) || "✦";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(b.startDate)) next.startDate = b.startDate;
+  if (b.days != null) next.days = Math.max(1, Math.min(90, Number(b.days) || req.cfg.days));
+  if (b.sheets != null) next.sheets = Math.max(1, Math.min(200, Number(b.sheets) || req.cfg.sheets));
+  if (b.music !== undefined) next.music = b.music ? String(b.music).slice(0, 200) : null;
+  await fsp.writeFile(req.tp.config, JSON.stringify(next, null, 2));
+  res.json({ ok: true, trip: next });
+});
+
 // ---- per-trip manifest / project -----------------------------------------
 app.get("/api/trips/:slug/manifest", withTrip, (req, res) => {
   res.json(mergedManifest(req.tp, req.cfg));

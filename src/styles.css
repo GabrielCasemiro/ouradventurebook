@@ -726,6 +726,7 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 .nt-grid input { border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; font-size: 14px; font-family: inherit; color: var(--ink); }
 .nt-grid input:focus { outline: none; border-color: var(--gold); }
 .nt-grid label:first-child, .nt-grid label:nth-child(2) { grid-column: span 2; }
+.nt-grid label.nt-wide { grid-column: 1 / -1; }
 .nt-slug { margin-top: 12px; color: var(--ink-soft); font-size: 13px; }
 .nt-slug code { background: var(--paper-2); padding: 2px 6px; border-radius: 5px; }
 
