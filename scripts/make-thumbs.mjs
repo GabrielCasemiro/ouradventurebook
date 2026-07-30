@@ -62,6 +62,10 @@ async function main() {
   const photos = parsePhotos().filter((p) => !p.ismovie);
   if (!photos.length) die("0 photos in photos.json.");
   console.log(`• [${slug}] Generating thumbnails for ${photos.length} photos…`);
+  // live progress for the UI (polled by the server); removed when done
+  const progressFile = path.join(tp.thumbs, ".progress.json");
+  const writeProgress = (d) => { try { fs.writeFileSync(progressFile, JSON.stringify({ done: d, total: photos.length })); } catch {} };
+  writeProgress(0);
   let done = 0, ok = 0;
   const out = await pool(photos, async (p) => {
     const uuid = p.uuid;
@@ -72,7 +76,8 @@ async function main() {
       hasThumb = await makeThumb(uuid, [...ders, p.path_edited, p.path]);
     }
     if (hasThumb) ok++;
-    if (++done % 200 === 0) console.log(`  … ${done}/${photos.length}`);
+    done++; writeProgress(done);
+    if (done % 200 === 0) console.log(`  … ${done}/${photos.length}`);
     const localDate = p.date_original || p.date || "";
     return {
       uuid, filename: p.original_filename || p.filename || uuid, date: localDate, dayIndex: dayIndexFor(localDate),
@@ -87,6 +92,7 @@ async function main() {
     return { index: i + 1, date, label: `Day ${i + 1}`, count: out.filter((p) => p.dayIndex === i + 1).length };
   });
   await fsp.writeFile(tp.manifest, JSON.stringify({ generatedAt: new Date().toISOString(), trip, days, photos: out }));
+  try { fs.rmSync(progressFile); } catch {}
   console.log(`\n✓ [${slug}] ${ok}/${photos.length} thumbnails. manifest.json ready.`);
   for (const d of days) console.log(`   ${d.label} (${d.date}): ${d.count}`);
 }

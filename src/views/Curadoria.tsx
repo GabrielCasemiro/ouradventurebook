@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../App";
 import { api } from "../lib/api";
 import { thumbUrl } from "../lib/api";
@@ -9,6 +9,7 @@ const fmtDate = (iso: string) => {
   const [y, m, d] = iso.split("-");
   return `${d}/${m}`;
 };
+const fmtElapsed = (ms: number) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
 export function Curadoria({
   activeDay,
@@ -27,7 +28,41 @@ export function Curadoria({
   const [toast, setToast] = useState<string | null>(null);
   const [dupe, setDupe] = useState<{ files: File[]; count: number } | null>(null);
   const [pendingDel, setPendingDel] = useState<{ uuid: string; filename: string; sheet: number | null } | null>(null);
+  const [importCmd, setImportCmd] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importProg, setImportProg] = useState<{ phase: string; done: number; total: number; status: string; elapsed: number } | null>(null);
+  const [importManual, setImportManual] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importCopied, setImportCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showImport && importCmd === null) api.importInfo(slug).then((i) => setImportCmd(i.command)).catch(() => {});
+  }, [showImport, slug, importCmd]);
+
+  const doImport = async () => {
+    setImporting(true); setImportMsg(null);
+    setImportProg({ phase: "photos", done: 0, total: 0, status: "Starting…", elapsed: 0 });
+    const poll = window.setInterval(async () => {
+      try { const p = await api.importInfo(slug); if (p.running) setImportProg({ phase: p.phase, done: p.done, total: p.total, status: p.status, elapsed: p.elapsed }); } catch {}
+    }, 700);
+    try {
+      await api.runImport(slug);
+      window.clearInterval(poll); setImportProg(null); setImporting(false);
+      await reloadManifest();
+      setShowImport(false);
+      setToast("Photos imported ✓"); setTimeout(() => setToast(null), 2500);
+    } catch (e: any) {
+      window.clearInterval(poll); setImportProg(null); setImporting(false);
+      const err = e.body?.error;
+      if (err === "permission") { setImportManual(true); setImportMsg("Your terminal doesn't have Full Disk Access, so the app can't read Photos. Grant it in System Settings › Privacy & Security › Full Disk Access (add your terminal), restart it, then try again — or run the command below."); }
+      else if (err === "not_found") { setImportManual(true); setImportMsg("osxphotos isn't installed or isn't on the PATH. Run `npm run setup`, or use the command below."); }
+      else if (err === "busy") { setImportMsg("An import is already running."); }
+      else { setImportManual(true); setImportMsg(e.body?.stderr || e.message || String(e)); }
+    }
+  };
+
+  const copyImport = () => { if (importCmd) navigator.clipboard.writeText(importCmd).then(() => { setImportCopied(true); setTimeout(() => setImportCopied(false), 1500); }); };
 
   const uploadedNames = useMemo(
     () => new Set(manifest.photos.filter((p) => p.source === "upload").map((p) => p.filename)),
@@ -255,18 +290,36 @@ export function Curadoria({
       {toast && <div className="upload-toast">{toast}</div>}
 
       {showImport && (
-        <div className="modal-overlay" onClick={() => setShowImport(false)}>
+        <div className="modal-overlay" onClick={() => !importing && setShowImport(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setShowImport(false)}>✕</button>
+            <button className="modal-close" onClick={() => !importing && setShowImport(false)}>✕</button>
             <h2>Import from Apple Photos</h2>
             <p className="muted">
-              Optional — pull photos from your macOS Photos library for this trip's dates. Run in your terminal (with Full
-              Disk Access), then reload the page. You can also just use “Add photos”.
+              Pull photos from your macOS Photos library for this trip's dates ({fmtDate(config.queryFrom || config.startDate)}–{fmtDate(config.queryTo || config.startDate)}).
+              Only metadata and previews are read — no images are uploaded anywhere. You can also just use “Add photos”.
             </p>
-            <pre className="finish-log">{`osxphotos query --from-date ${config.queryFrom} --to-date ${config.queryTo} \\
-  --only-photos --mute --json > trips/${config.slug}/photos.json
-
-npm run thumbs -- ${config.slug}`}</pre>
+            <div className="disc-sync-actions">
+              <button className="btn-primary" onClick={doImport} disabled={importing}>{importing ? "Importing…" : "Import now"}</button>
+              <button className="disc-manual-toggle" onClick={() => setImportManual((v) => !v)}>{importManual ? "hide manual command" : "run it manually"}</button>
+            </div>
+            {importing && importProg && (
+              <div className="disc-prog">
+                <div className={`exp-bar${importProg.total > 0 ? "" : " indeterminate"}`}>
+                  <div className="exp-fill" style={importProg.total > 0 ? { width: `${Math.round((importProg.done / importProg.total) * 100)}%` } : undefined} />
+                </div>
+                <div className="disc-prog-label">
+                  {importProg.phase === "thumbs" ? "Making thumbnails" : importProg.status}
+                  {importProg.total > 0 ? ` · ${importProg.done.toLocaleString()}/${importProg.total.toLocaleString()}` : ""} · {fmtElapsed(importProg.elapsed)}
+                </div>
+              </div>
+            )}
+            {importMsg && <p className="err-msg">{importMsg}</p>}
+            {importManual && (
+              <div className="disc-manual">
+                <p className="muted">Run this in your terminal (Full Disk Access), then reload:</p>
+                <div className="cmd"><code>{importCmd || "…"}</code><button className="btn-copy" onClick={copyImport}>{importCopied ? "copied ✓" : "copy"}</button></div>
+              </div>
+            )}
           </div>
         </div>
       )}
