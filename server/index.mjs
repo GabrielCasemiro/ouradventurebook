@@ -82,6 +82,12 @@ function ingestUpload(src, thumb, web) {
   });
 }
 
+// per-trip photo import (osxphotos → photos.json → thumbnails)
+let importState = { running: false, slug: null, phase: "", done: 0, total: 0, status: "", startedAt: 0, error: null };
+const importCommand = (cfg) =>
+  `cd ${ROOT} && osxphotos query --from-date ${cfg.queryFrom} --to-date ${cfg.queryTo} ` +
+  `--only-photos --mute --json > trips/${cfg.slug}/photos.json && npm run thumbs -- ${cfg.slug}`;
+
 // middleware: validate :slug
 const withTrip = (req, res, next) => {
   if (!okSlug(req.params.slug)) return res.status(404).json({ error: "trip_not_found" });
@@ -299,6 +305,67 @@ app.put("/api/trips/:slug/config", withTrip, async (req, res) => {
 // ---- per-trip manifest / project -----------------------------------------
 app.get("/api/trips/:slug/manifest", withTrip, (req, res) => {
   res.json(mergedManifest(req.tp, req.cfg));
+});
+
+// import command + live progress of an in-flight import for this trip
+app.get("/api/trips/:slug/import", withTrip, (req, res) => {
+  const st = importState.running && importState.slug === req.params.slug ? importState : { running: false, phase: "", done: 0, total: 0, status: "" };
+  const elapsed = st.running ? Date.now() - st.startedAt : 0;
+  res.json({ command: importCommand(req.cfg), running: st.running, phase: st.phase, done: st.done, total: st.total, status: st.status, elapsed });
+});
+
+// run osxphotos to write photos.json, then make-thumbs for thumbnails + manifest
+app.post("/api/trips/:slug/import", withTrip, (req, res) => {
+  if (importState.running) return res.status(409).json({ error: "busy", slug: importState.slug });
+  const cfg = req.cfg, tp = req.tp, slug = req.params.slug;
+  importState = { running: true, slug, phase: "photos", done: 0, total: 0, status: "Reading your library…", startedAt: Date.now(), error: null };
+  let sent = false, err = "";
+  const stop = (error = null) => { importState = { ...importState, running: false, error }; };
+  const fail = (body, status = 500) => { if (sent) return; sent = true; stop(body.error || "failed"); res.status(status).json(body); };
+  const finishOk = () => { if (sent) return; sent = true; stop(); res.json({ ok: true }); };
+
+  // phase 1: osxphotos metadata → photos.json
+  const out = fs.createWriteStream(tp.photos);
+  let file1Done = false, code1 = null;
+  const afterPhotos = () => {
+    if (!file1Done || code1 === null) return;
+    if (code1 !== 0) {
+      const perm = /full disk access|not authorized|operation not permitted|unable to open|permission|photos library/i.test(err);
+      return fail({ error: perm ? "permission" : "osxphotos_failed", code: code1, stderr: err.slice(-2000) });
+    }
+    startThumbs();
+  };
+  let child1;
+  try { child1 = spawn("osxphotos", ["query", "--from-date", cfg.queryFrom, "--to-date", cfg.queryTo, "--only-photos", "--mute", "--json"]); }
+  catch (e) { try { out.destroy(); } catch {} return fail({ error: "not_found", message: String(e.message || e) }); }
+  child1.on("error", (e) => { try { out.destroy(); } catch {} fail({ error: e.code === "ENOENT" ? "not_found" : "spawn_failed", message: String(e.message || e) }); });
+  child1.stdout.pipe(out);
+  child1.stderr.on("data", (d) => {
+    err += d;
+    const lines = String(d).split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
+    const last = lines[lines.length - 1];
+    if (last) {
+      importState.status = /done processing/i.test(last) ? "Almost done reading the library…" : /processing/i.test(last) ? "Reading your library…" : last.slice(0, 120);
+      const m = last.match(/(\d[\d,]*)\s*\/\s*(\d[\d,]*)/);
+      if (m) { importState.done = +m[1].replace(/,/g, ""); importState.total = +m[2].replace(/,/g, ""); }
+    }
+  });
+  out.on("finish", () => { file1Done = true; afterPhotos(); });
+  out.on("error", () => fail({ error: "write_failed" }));
+  child1.on("close", (c) => { code1 = c; afterPhotos(); });
+
+  // phase 2: thumbnails + manifest
+  function startThumbs() {
+    importState = { ...importState, phase: "thumbs", done: 0, total: 0, status: "Making thumbnails…" };
+    const progFile = path.join(tp.thumbs, ".progress.json");
+    const timer = setInterval(() => { try { const p = readJSON(progFile); if (p) { importState.done = p.done || 0; importState.total = p.total || 0; } } catch {} }, 500);
+    let terr = "", child2;
+    try { child2 = spawn(process.execPath, [path.join(ROOT, "scripts", "make-thumbs.mjs"), slug]); }
+    catch (e) { clearInterval(timer); return fail({ error: "spawn_failed", message: String(e.message || e) }); }
+    child2.stderr.on("data", (d) => (terr += d));
+    child2.on("error", (e) => { clearInterval(timer); fail({ error: "spawn_failed", message: String(e.message || e) }); });
+    child2.on("close", (c) => { clearInterval(timer); if (c === 0) finishOk(); else fail({ error: "thumbs_failed", code: c, stderr: terr.slice(-2000) }); });
+  }
 });
 
 // upload photos straight into the trip (no iCloud needed)

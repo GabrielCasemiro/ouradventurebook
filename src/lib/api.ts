@@ -26,6 +26,9 @@ export const api = {
   updateConfig: (slug: string, patch: Partial<TripConfig>): Promise<{ ok: boolean; trip: TripConfig }> =>
     fetch(`${base(slug)}/config`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) }).then(j),
   manifest: (slug: string): Promise<Manifest> => fetch(`${base(slug)}/manifest`).then(j),
+  importInfo: (slug: string): Promise<{ command: string; running: boolean; phase: string; done: number; total: number; status: string; elapsed: number }> =>
+    fetch(`${base(slug)}/import`).then(j),
+  runImport: (slug: string): Promise<{ ok: boolean }> => fetch(`${base(slug)}/import`, { method: "POST" }).then(j),
   getProject: (slug: string): Promise<Project> => fetch(`${base(slug)}/project`).then(j),
   putProject: (slug: string, p: Project): Promise<{ ok: boolean; updatedAt: string }> =>
     fetch(`${base(slug)}/project`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).then(j),
