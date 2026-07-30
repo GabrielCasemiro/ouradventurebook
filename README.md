@@ -22,11 +22,19 @@ never leave your machine.
 
 ![Trip map](docs/map.png)
 
+**Discover trips** — scan your Photos library and get trip suggestions (destination, dates, photo count) ready to create in one click.
+
+![Discover trips from your photos](docs/discover.png)
+
 > Photos in the Curate/Album screenshots are blurred for privacy; the app itself shows them sharp.
 
 ## Features
 
 - **Multi‑trip** — one self‑contained folder per trip (`trips/<slug>/`).
+- **Discover trips from your photos** — the app scans your library's dates and
+  locations, auto‑detects your home base, and suggests the stretches you spent away
+  from home as trips (country flag or a theme icon, dates, photo count) you can create
+  in one click. Metadata only — no images leave your Mac.
 - **Day‑by‑day curation** straight from your Apple Photos library, grouped by day.
 - **Add photos from anywhere** — drag & drop or pick files (JPG/PNG/HEIC) right in the
   Curate tab. Uploaded photos behave exactly like imported ones; iCloud is optional.
@@ -39,6 +47,12 @@ never leave your machine.
   long, 2 when it fits), with a resolution preflight report.
 - **Shareable digital album** — a scrollable, cinematic web version with a day index,
   optional background music, parallax cover and sparkles.
+- **Social carousels** — build Instagram‑ready carousels from your chosen photos
+  (feed 4:5, square 1:1 or story 9:16), each photo matted (never cropped) over a
+  blurred or solid background, with a caption. Export the slides + caption, or hand off
+  to Instagram in one click (copies the caption, opens the folder).
+- **Edit any trip** — change the emoji, title, subtitle, dates, album sheets and
+  background music after creating a trip.
 
 ## Requirements
 
@@ -65,17 +79,25 @@ Open http://localhost:5173 — you'll land on the trips home page.
 
 ## Add a trip
 
-1. Click **New trip** and fill in title, dates and number of album sheets.
-2. Open the trip. It shows the exact commands to import your photos, e.g.:
-   ```bash
-   # run from the project root
-   osxphotos query --from-date 2026-08-27 --to-date 2026-09-01 \
-     --only-photos --mute --json > trips/santiago-2026/photos.json
+Let the app **find your trips**, or add one by hand:
 
-   npm run thumbs -- santiago-2026
-   ```
-   `thumbs` builds lightweight previews (no iCloud download) and the catalog.
-3. Reload the page and curate: pick photos per day, write captions, arrange the album.
+- **Discover** — on the home page, click **Discover from photos**, sync your library
+  (metadata only), and the app suggests trips with dates. Click **Create** on any of
+  them (or **Create all**).
+- **New trip** — click **New trip** and fill in title, dates and album sheets.
+
+Then open the trip and import its photos. It shows the exact command:
+
+```bash
+cd ~/ouradventurebook   # the project root
+osxphotos query --from-date 2026-08-27 --to-date 2026-09-01 \
+  --only-photos --mute --json > trips/santiago-2026/photos.json
+npm run thumbs -- santiago-2026
+```
+
+`thumbs` builds lightweight previews (no iCloud download) and the catalog. Reload the
+page and curate: pick photos per day, write captions, arrange the album. You can tweak
+the emoji, title, dates and more anytime with **Edit** on the trip page.
 
 ## Export
 
