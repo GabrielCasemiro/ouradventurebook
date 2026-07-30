@@ -8,6 +8,7 @@ const slugify = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50);
 const addDay = (iso: string) => { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
 const daysBetween = (a: string, b: string) => Math.max(1, Math.round((Date.parse(b) - Date.parse(a)) / 86400000) + 1);
+const fmtElapsed = (ms: number) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
 export function Home() {
   const [trips, setTrips] = useState<TripSummary[] | null>(null);
@@ -106,6 +107,7 @@ function DiscoverTrips({ onClose, onCreated }: { onClose: () => void; onCreated:
   const [result, setResult] = useState<DiscoveryResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [prog, setProg] = useState<{ done: number; total: number; status: string; sizeMB: number; elapsed: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -133,11 +135,19 @@ function DiscoverTrips({ onClose, onCreated }: { onClose: () => void; onCreated:
 
   const syncNow = async () => {
     setSyncing(true); setMsg(null);
+    setProg({ done: 0, total: 0, status: "Starting…", sizeMB: 0, elapsed: 0 });
+    const poll = window.setInterval(async () => {
+      try { const p = await api.syncProgress(); if (p.running) setProg({ done: p.done, total: p.total, status: p.status, sizeMB: p.sizeMB, elapsed: p.elapsed }); } catch {}
+    }, 700);
     try {
       const r = await api.syncDiscovery();
+      window.clearInterval(poll);
+      setProg(null);
       setInfo((prev) => (prev ? { ...prev, hasLibrary: true, libraryInfo: r.libraryInfo } : prev));
       await analyze(result?.home?.key ?? info?.settings.homeKey);
     } catch (e: any) {
+      window.clearInterval(poll);
+      setProg(null);
       if (e.body?.error === "permission") {
         setShowManual(true);
         setMsg("Your terminal doesn't have Full Disk Access, so the app can't read Photos. Grant it in System Settings › Privacy & Security › Full Disk Access (add your terminal), restart the terminal, then try again — or run the command below yourself.");
@@ -196,6 +206,18 @@ function DiscoverTrips({ onClose, onCreated }: { onClose: () => void; onCreated:
               {showManual ? "hide manual command" : "run it manually"}
             </button>
           </div>
+          {syncing && (
+            <div className="disc-prog">
+              <div className={`exp-bar${prog && prog.total > 0 ? "" : " indeterminate"}`}>
+                <div className="exp-fill" style={prog && prog.total > 0 ? { width: `${Math.round((prog.done / prog.total) * 100)}%` } : undefined} />
+              </div>
+              <div className="disc-prog-label">
+                {prog?.status || "Reading your library…"}
+                {prog && prog.total > 0 ? ` · ${prog.done.toLocaleString()}/${prog.total.toLocaleString()}` : prog && prog.sizeMB > 0 ? ` · ${prog.sizeMB} MB` : ""}
+                {prog ? ` · ${fmtElapsed(prog.elapsed)}` : ""}
+              </div>
+            </div>
+          )}
           {showManual && (
             <div className="disc-manual">
               <p className="muted">Runs the same command in your terminal, then click Re-analyze:</p>

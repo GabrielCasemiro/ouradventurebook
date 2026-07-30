@@ -732,6 +732,8 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 .disc-manual-toggle { margin-left: auto; border: 0; background: transparent; color: var(--blue); font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .disc-manual { margin-top: 4px; }
 .disc-manual .muted { margin: 0 0 8px; font-size: 13px; }
+.disc-prog { display: flex; flex-direction: column; gap: 7px; margin-top: 2px; }
+.disc-prog-label { font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
 .disc-home { margin-top: 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .disc-home label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--ink-soft); }

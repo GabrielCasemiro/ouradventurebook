@@ -110,6 +110,8 @@ const DISCOVERY_DIR = path.join(ROOT, "data", "discovery");
 const DISCOVERY_SETTINGS = path.join(DISCOVERY_DIR, "settings.json");
 const DISCOVERY_LIB = path.join(DISCOVERY_DIR, "library.json");
 
+let syncState = { running: false, done: 0, total: 0, status: "", startedAt: 0, sizeMB: 0, error: null };
+
 const isoDay = (d) => d.toISOString().slice(0, 10);
 const discoveryDefaults = () => {
   const to = new Date();
@@ -146,32 +148,55 @@ app.put("/api/discovery", async (req, res) => {
 
 // run osxphotos directly (works when the terminal running the server has Full
 // Disk Access). Streams the metadata JSON straight to data/discovery/library.json.
+app.get("/api/discovery/sync/progress", (_req, res) => {
+  const elapsed = syncState.running ? Date.now() - syncState.startedAt : 0;
+  res.json({ ...syncState, elapsed });
+});
+
 app.post("/api/discovery/sync", async (req, res) => {
   const s = discoverySettings();
   await fsp.mkdir(DISCOVERY_DIR, { recursive: true });
   const out = fs.createWriteStream(DISCOVERY_LIB);
   let err = "", sent = false, closedCode = null, fileDone = false;
-  const fail = (body, status = 500) => { if (sent) return; sent = true; try { out.destroy(); } catch {} res.status(status).json(body); };
+  syncState = { running: true, done: 0, total: 0, status: "Starting osxphotos…", startedAt: Date.now(), sizeMB: 0, error: null };
+  const stopState = (error = null) => { syncState = { ...syncState, running: false, error }; };
+  const fail = (body, status = 500) => { if (sent) return; sent = true; try { out.destroy(); } catch {} stopState(body.error || "failed"); res.status(status).json(body); };
   const finish = () => {
     if (sent || closedCode === null || !fileDone) return;
     if (closedCode === 0) {
       sent = true;
       const st = fs.statSync(DISCOVERY_LIB);
+      stopState();
       res.json({ ok: true, libraryInfo: { syncedAt: st.mtime.toISOString(), sizeMB: +(st.size / 1048576).toFixed(1) } });
     } else {
       const perm = /full disk access|not authorized|operation not permitted|unable to open|permission|photos library|osxphotos.db/i.test(err);
       fail({ error: perm ? "permission" : "osxphotos_failed", code: closedCode, stderr: err.slice(-2000) });
     }
   };
+  // reflect how much has been written so far (some osxphotos versions stream)
+  const sizeTimer = setInterval(() => {
+    try { if (syncState.running) syncState.sizeMB = +(fs.statSync(DISCOVERY_LIB).size / 1048576).toFixed(1); } catch {}
+  }, 800);
 
   let child;
   try { child = spawn("osxphotos", ["query", "--from-date", s.from, "--to-date", s.to, "--json"]); }
-  catch (e) { return fail({ error: "not_found", message: String(e.message || e) }); }
-  child.on("error", (e) => fail({ error: e.code === "ENOENT" ? "not_found" : "spawn_failed", message: String(e.message || e) }));
+  catch (e) { clearInterval(sizeTimer); return fail({ error: "not_found", message: String(e.message || e) }); }
+  child.on("error", (e) => { clearInterval(sizeTimer); fail({ error: e.code === "ENOENT" ? "not_found" : "spawn_failed", message: String(e.message || e) }); });
   child.stdout.pipe(out);
-  child.stderr.on("data", (d) => (err += d));
-  out.on("finish", () => { fileDone = true; finish(); });
-  out.on("error", () => fail({ error: "write_failed" }));
+  child.stderr.on("data", (d) => {
+    err += d;
+    // parse the latest progress line osxphotos prints to stderr
+    const lines = String(d).split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
+    const last = lines[lines.length - 1];
+    if (last) {
+      syncState.status = last.slice(0, 120);
+      const m = last.match(/(\d[\d,]*)\s*\/\s*(\d[\d,]*)/);
+      if (m) { syncState.done = +m[1].replace(/,/g, ""); syncState.total = +m[2].replace(/,/g, ""); }
+      else { const p = last.match(/(\d+)%/); if (p) { syncState.done = +p[1]; syncState.total = 100; } }
+    }
+  });
+  out.on("finish", () => { fileDone = true; clearInterval(sizeTimer); finish(); });
+  out.on("error", () => { clearInterval(sizeTimer); fail({ error: "write_failed" }); });
   child.on("close", (code) => { closedCode = code; finish(); });
 });
 
