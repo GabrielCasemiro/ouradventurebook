@@ -55,10 +55,25 @@ function mergedManifest(tp, cfg) {
       .map((f) => f.slice(0, -4))
   );
   const webSources = readJSON(path.join(tp.web, ".sources.json")) || {};
+  // which videos already have a web-playable .mp4 render
+  const videoSet = new Set(
+    (fs.existsSync(tp.web) ? fs.readdirSync(tp.web) : [])
+      .filter((f) => f.endsWith(".mp4"))
+      .map((f) => f.slice(0, -4))
+  );
+  // posters/thumbnails on disk — a video's poster is made after the manifest is
+  // written, so recompute hasThumb from disk instead of trusting the stored flag.
+  const thumbSet = new Set(
+    (fs.existsSync(tp.thumbs) ? fs.readdirSync(tp.thumbs) : [])
+      .filter((f) => f.endsWith(".jpg") && !f.startsWith(".tmp"))
+      .map((f) => f.slice(0, -4))
+  );
   const photos = [...(base?.photos || []), ...uploads].map((p) => ({
     ...p,
+    hasThumb: p.hasThumb || thumbSet.has(p.uuid),
     hd: webSet.has(p.uuid),
     hdSource: webSet.has(p.uuid) ? webSources[p.uuid] || "preview" : undefined,
+    hasVideo: videoSet.has(p.uuid) || undefined,
   }));
   photos.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const days = Array.from({ length: cfg.days }, (_, i) => {
@@ -86,7 +101,7 @@ function ingestUpload(src, thumb, web) {
 let importState = { running: false, slug: null, phase: "", done: 0, total: 0, status: "", startedAt: 0, error: null };
 const importCommand = (cfg) =>
   `cd ${ROOT} && osxphotos query --from-date ${cfg.queryFrom} --to-date ${cfg.queryTo} ` +
-  `--only-photos --mute --json > trips/${cfg.slug}/photos.json && npm run thumbs -- ${cfg.slug}`;
+  `--mute --json > trips/${cfg.slug}/photos.json && npm run thumbs -- ${cfg.slug}`;
 
 // middleware: validate :slug
 const withTrip = (req, res, next) => {
@@ -108,6 +123,13 @@ app.get("/trips/:slug/photo/:uuid", withTrip, (req, res) => {
   const thumb = path.join(req.tp.thumbs, `${uuid}.jpg`);
   if (fs.existsSync(web)) return res.sendFile(web);
   if (fs.existsSync(thumb)) return res.sendFile(thumb);
+  res.status(404).end();
+});
+// Stream a video's web-playable MP4 (res.sendFile honours Range → seek/streaming).
+app.get("/trips/:slug/video/:uuid", withTrip, (req, res) => {
+  const uuid = String(req.params.uuid).replace(/[^0-9A-Za-z-]/g, "");
+  const mp4 = path.join(req.tp.web, `${uuid}.mp4`);
+  if (fs.existsSync(mp4)) return res.sendFile(mp4);
   res.status(404).end();
 });
 
@@ -336,7 +358,7 @@ app.post("/api/trips/:slug/import", withTrip, (req, res) => {
     startThumbs();
   };
   let child1;
-  try { child1 = spawn("osxphotos", ["query", "--from-date", cfg.queryFrom, "--to-date", cfg.queryTo, "--only-photos", "--mute", "--json"]); }
+  try { child1 = spawn("osxphotos", ["query", "--from-date", cfg.queryFrom, "--to-date", cfg.queryTo, "--mute", "--json"]); }
   catch (e) { try { out.destroy(); } catch {} return fail({ error: "not_found", message: String(e.message || e) }); }
   child1.on("error", (e) => { try { out.destroy(); } catch {} fail({ error: e.code === "ENOENT" ? "not_found" : "spawn_failed", message: String(e.message || e) }); });
   child1.stdout.pipe(out);
@@ -452,9 +474,10 @@ app.delete("/api/trips/:slug/photo/:uuid", withTrip, async (req, res) => {
       }
     }
   }
-  // delete generated images
+  // delete generated images (and the video render, if any)
   await fsp.unlink(path.join(req.tp.thumbs, `${uuid}.jpg`)).catch(() => {});
   await fsp.unlink(path.join(req.tp.web, `${uuid}.jpg`)).catch(() => {});
+  await fsp.unlink(path.join(req.tp.web, `${uuid}.mp4`)).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -574,7 +597,9 @@ function runScript(cmd, args) {
 // so it's fast on repeat visits. Called automatically when the digital album opens.
 app.post("/api/trips/:slug/web/prepare", withTrip, async (req, res) => {
   const web = await runScript(process.execPath, [path.join(ROOT, "scripts", "make-web.mjs"), req.params.slug]);
-  res.json({ ok: web.code === 0, log: web.out || web.err });
+  // transcode any chosen/placed videos to web/<uuid>.mp4 for the digital album
+  const vid = await runScript(process.execPath, [path.join(ROOT, "scripts", "make-videos.mjs"), req.params.slug]);
+  res.json({ ok: web.code === 0, log: [web.out || web.err, vid.out || vid.err].filter(Boolean).join("\n") });
 });
 
 // live progress of an in-flight make-web run (for a progress bar); running:false when idle
@@ -600,13 +625,17 @@ app.post("/api/trips/:slug/export/finish", withTrip, async (req, res) => {
     ? web.out
     : "⚠ Print files are ready, but generating the digital-album HD images failed:\n" + (web.err || web.out));
 
+  // 3) transcode any videos so they play in the digital album (never in print)
+  const vid = await runScript(process.execPath, [path.join(ROOT, "scripts", "make-videos.mjs"), req.params.slug]);
+  log += "\n" + (vid.out || vid.err || "");
+
   res.json({ ok: true, log });
 });
 
 // ---- frontend (production) -----------------------------------------------
 if (fs.existsSync(DIST)) {
   app.use(express.static(DIST));
-  app.get(/^(?!\/api|\/trips\/[^/]+\/(thumbs|photo)).*/, (_req, res) => res.sendFile(path.join(DIST, "index.html")));
+  app.get(/^(?!\/api|\/trips\/[^/]+\/(thumbs|photo|video)).*/, (_req, res) => res.sendFile(path.join(DIST, "index.html")));
 }
 
 app.listen(PORT, () => {

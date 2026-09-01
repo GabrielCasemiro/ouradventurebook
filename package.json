@@ -14,6 +14,7 @@
     "preview": "vite preview",
     "thumbs": "node scripts/make-thumbs.mjs",
     "web": "node scripts/make-web.mjs",
+    "videos": "node scripts/make-videos.mjs",
     "manifest": "node scripts/build-manifest.mjs",
     "rename-export": "python3 scripts/rename-export.py",
     "book": "node scripts/build-book.mjs"

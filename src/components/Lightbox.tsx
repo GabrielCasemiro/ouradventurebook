@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useApp } from "../App";
-import { thumbUrl } from "../lib/api";
+import { thumbUrl, videoUrl } from "../lib/api";
 import type { Photo } from "../lib/types";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -119,7 +119,23 @@ export function Lightbox({
 
       <div className="lb-stage" onClick={(e) => e.stopPropagation()}>
         <div className="lb-imgwrap">
-          {photo.hasThumb ? (
+          {photo.type === "video" ? (
+            photo.hasVideo ? (
+              <video
+                className="lb-video"
+                src={videoUrl(slug, uuid)}
+                poster={photo.hasThumb ? thumbUrl(slug, uuid) : undefined}
+                controls
+                playsInline
+                preload="none"
+              />
+            ) : (
+              <div className="lb-vidpending">
+                {photo.hasThumb && <img src={thumbUrl(slug, uuid)} alt={photo.filename} />}
+                <span className="lb-vidbadge">▶ Video — open the digital album to play it</span>
+              </div>
+            )
+          ) : photo.hasThumb ? (
             <img src={thumbUrl(slug, uuid)} alt={photo.filename} />
           ) : (
             <div className="no-thumb big">no thumbnail</div>

@@ -27,7 +27,7 @@ const dayIndexFor = (iso) => {
 };
 
 async function main() {
-  const photos = parsePhotos().filter((p) => !p.ismovie);
+  const photos = parsePhotos();
   if (!photos.length) die("0 photos in photos.json.");
   const out = photos.map((p) => {
     const localDate = p.date_original || p.date || "";
@@ -39,6 +39,8 @@ async function main() {
       width: p.width || p.original_width || 0,
       height: p.height || p.original_height || 0,
       isFavorite: !!p.favorite,
+      type: p.ismovie ? "video" : "photo",
+      duration: p.ismovie ? (p.exif_info?.duration ?? p.duration ?? undefined) : undefined,
       meta: photoMeta(p),
       hasThumb: fs.existsSync(path.join(tp.thumbs, `${p.uuid}.jpg`)),
       sig:

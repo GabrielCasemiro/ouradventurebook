@@ -60,8 +60,11 @@ async function pool(items, worker, size) {
 
 async function main() {
   await fsp.mkdir(tp.web, { recursive: true });
-  const byUuid = new Map(parsePhotos().map((p) => [p.uuid, p]));
-  const list = [...used];
+  const allPhotos = parsePhotos();
+  const byUuid = new Map(allPhotos.map((p) => [p.uuid, p]));
+  // videos get an .mp4 render from make-videos.mjs, not an HD .jpg — skip them here
+  const movieSet = new Set(allPhotos.filter((p) => p.ismovie).map((p) => p.uuid));
+  const list = [...used].filter((u) => !movieSet.has(u));
   if (!list.length) die("No photos chosen/placed yet.");
   // remember which source each render came from, so a render made from a local
   // preview can be upgraded to the true original once it's been downloaded.

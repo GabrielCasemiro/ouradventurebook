@@ -67,3 +67,7 @@ export const thumbUrl = (slug: string, uuid: string) => `/trips/${slug}/thumbs/$
 // starts serving a different (upgraded) image.
 export const photoUrl = (slug: string, uuid: string, v?: string) =>
   `/trips/${slug}/photo/${uuid}${v ? `?v=${encodeURIComponent(v)}` : ""}`;
+// Web-playable MP4 for a video item, streamed with HTTP Range support.
+// No file extension in the path: the server resolves it to web/<uuid>.mp4 and
+// sends the correct video/mp4 Content-Type from the file itself.
+export const videoUrl = (slug: string, uuid: string) => `/trips/${slug}/video/${uuid}`;
