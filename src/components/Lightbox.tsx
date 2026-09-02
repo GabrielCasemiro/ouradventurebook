@@ -186,7 +186,9 @@ function VideoView({ slug, photo }: { slug: string; photo: Photo }) {
         controls
         autoPlay={autoplay}
         playsInline
-        preload={autoplay ? "auto" : "none"}
+        // metadata (not none) so a paused video still shows a frame + the native
+        // play button instead of an empty black box; it won't play until clicked
+        preload={autoplay ? "auto" : "metadata"}
       />
     );
   }
