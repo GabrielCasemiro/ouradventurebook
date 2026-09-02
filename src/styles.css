@@ -907,9 +907,16 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 }
 .story-photo.portrait .story-photo-frame video { max-width: min(560px, 92vw); }
 .story-photo-frame { position: relative; }
-/* decorative ▶ shown only while a video is still being prepared */
 .story-play {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center;
+  width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center;
   background: rgba(9,16,40,0.6); color: #fff; font-size: 24px; padding-left: 4px; pointer-events: none;
 }
+/* the clickable play/retry button (prepares the video on demand) */
+.story-play.interactive {
+  pointer-events: auto; cursor: pointer; border: 2px solid rgba(255,255,255,0.9);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5); transition: background 0.15s, transform 0.12s, border-color 0.15s;
+}
+.story-play.interactive:hover { background: var(--gold, #e9b84d); color: #10204a; border-color: var(--gold, #e9b84d); transform: translate(-50%, -50%) scale(1.07); }
+.story-play.err { padding-left: 0; font-size: 28px; }
+.story-play.busy { padding-left: 0; }

@@ -275,22 +275,97 @@ function StoryPhoto({ item }: { item: StoryItem }) {
   return (
     <figure className={`story-photo reveal ${portrait ? "portrait" : "landscape"}`} ref={ref}>
       <div className="story-photo-frame">
-        {isVideo && item.photo.hasVideo ? (
-          // full clip, poster shown until the visitor clicks play (nothing preloads)
-          <video
-            src={videoUrl(slug, item.uuid)}
-            poster={photoUrl(slug, item.uuid, item.photo.hdSource)}
-            controls
-            playsInline
-            preload="none"
-          />
+        {isVideo ? (
+          <StoryVideo slug={slug} item={item} />
         ) : (
           <img src={photoUrl(slug, item.uuid, item.photo.hdSource)} loading="lazy" alt={item.caption || item.photo.filename} />
         )}
-        {isVideo && !item.photo.hasVideo && <span className="story-play" aria-hidden="true">▶</span>}
       </div>
       {item.caption.trim() && <figcaption>{item.caption}</figcaption>}
     </figure>
+  );
+}
+
+// A video in the digital album. If its .mp4 render exists it plays on click; if
+// not, clicking prepares it on demand (transcode, downloading from iCloud if
+// needed) as a background job, then plays. Mirrors the editor's VideoView.
+type VideoStatus = "idle" | "preparing" | "ready" | "error";
+function StoryVideo({ slug, item }: { slug: string; item: StoryItem }) {
+  const { uuid } = item;
+  const poster = photoUrl(slug, uuid, item.photo.hdSource);
+  const [status, setStatus] = useState<VideoStatus>(item.photo.hasVideo ? "ready" : "idle");
+  const [autoplay, setAutoplay] = useState(false);
+  const [errMsg, setErrMsg] = useState("");
+  const playWhenReady = useRef(false);
+
+  // reconcile with the server: a prepare job may already be running in background
+  useEffect(() => {
+    if (item.photo.hasVideo) { setStatus("ready"); return; }
+    let cancelled = false;
+    api.videoStatus(slug, uuid).then((s) => {
+      if (cancelled) return;
+      if (s.status === "ready") setStatus("ready");
+      else if (s.status === "running") setStatus("preparing");
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [uuid, item.photo.hasVideo, slug]);
+
+  // poll while preparing; leaving the page doesn't stop the server job
+  useEffect(() => {
+    if (status !== "preparing") return;
+    let alive = true;
+    let timer = 0;
+    const tick = async () => {
+      try {
+        const s = await api.videoStatus(slug, uuid);
+        if (!alive) return;
+        if (s.status === "ready") { if (playWhenReady.current) setAutoplay(true); setStatus("ready"); return; }
+        if (s.status === "error") { setErrMsg("Couldn't prepare this video. Tap to retry."); setStatus("error"); return; }
+      } catch {}
+      if (alive) timer = window.setTimeout(tick, 1500);
+    };
+    timer = window.setTimeout(tick, 700);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [status, slug, uuid]);
+
+  const play = async () => {
+    playWhenReady.current = true;
+    setErrMsg("");
+    setStatus("preparing");
+    try {
+      const r = await api.prepareVideo(slug, uuid);
+      if (r.status === "ready") { setAutoplay(true); setStatus("ready"); }
+      else if (r.status === "error") { setErrMsg("Couldn't prepare this video. Tap to retry."); setStatus("error"); }
+    } catch {
+      setErrMsg("Couldn't prepare this video. Tap to retry.");
+      setStatus("error");
+    }
+  };
+
+  if (status === "ready") {
+    return (
+      <video
+        src={videoUrl(slug, uuid)}
+        poster={poster}
+        controls
+        autoPlay={autoplay}
+        playsInline
+        preload={autoplay ? "auto" : "metadata"}
+      />
+    );
+  }
+
+  return (
+    <>
+      <img src={poster} loading="lazy" alt={item.caption || item.photo.filename} />
+      {status === "preparing" ? (
+        <span className="story-play busy" aria-hidden="true"><span className="lb-spinner" /></span>
+      ) : status === "error" ? (
+        <button className="story-play interactive err" onClick={play} title={errMsg} aria-label="Retry">↻</button>
+      ) : (
+        <button className="story-play interactive" onClick={play} aria-label="Play video">▶</button>
+      )}
+    </>
   );
 }
 
