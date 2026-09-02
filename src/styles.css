@@ -920,3 +920,5 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 .story-play.interactive:hover { background: var(--gold, #e9b84d); color: #10204a; border-color: var(--gold, #e9b84d); transform: translate(-50%, -50%) scale(1.07); }
 .story-play.err { padding-left: 0; font-size: 28px; }
 .story-play.busy { padding-left: 0; }
+/* standalone spinner: drop the text-gap margin so it centers in the circle */
+.story-play.busy .lb-spinner { margin: 0; width: 26px; height: 26px; border-width: 3px; }
