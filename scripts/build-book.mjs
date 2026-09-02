@@ -73,7 +73,10 @@ async function main() {
         const ph = u ? byUuid.get(u) : null;
         if (!ph) continue;
         if (ph.type === "video") { skippedVideos++; continue; }
-        items.push({ uuid: u, caption: project.photos[u]?.caption || "", dayIndex: ph.dayIndex, w: ph.width, h: ph.height });
+        // respect a manual day override (photo dragged to another day in Curate)
+        const ov = project.photos[u]?.dayIndex;
+        const dayIndex = Number.isInteger(ov) ? Math.min(Math.max(ov, 1), cfg.days) : ph.dayIndex;
+        items.push({ uuid: u, caption: project.photos[u]?.caption || "", dayIndex, w: ph.width, h: ph.height });
       }
   if (skippedVideos) console.log(`• Skipped ${skippedVideos} video(s) — the printed book is photos only.`);
   if (!items.length) die("No photos placed in the album.");
