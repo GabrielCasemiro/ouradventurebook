@@ -879,6 +879,11 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
   max-width: 80%; text-align: center; padding: 12px 18px; border-radius: 14px;
   background: rgba(9,16,40,0.9); color: #fff; font-size: 14px; font-weight: 600; line-height: 1.45;
 }
+.lb-retry {
+  display: block; margin: 12px auto 0; padding: 7px 16px; border: none; border-radius: 999px; cursor: pointer;
+  background: var(--gold, #e9b84d); color: #10204a; font-weight: 700; font-size: 13px;
+}
+.lb-retry:hover { filter: brightness(1.06); }
 .lb-playbtn {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   width: 92px; height: 92px; border: 3px solid rgba(255,255,255,0.92); border-radius: 50%; cursor: pointer;

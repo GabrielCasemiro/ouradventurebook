@@ -602,16 +602,36 @@ app.post("/api/trips/:slug/web/prepare", withTrip, async (req, res) => {
   res.json({ ok: web.code === 0, log: [web.out || web.err, vid.out || vid.err].filter(Boolean).join("\n") });
 });
 
-// Transcode one video on demand (from the editor), so it can be watched right
-// away without opening the digital album. Returns ready:false with the log when
-// the original isn't on this Mac (e.g. still in iCloud) so it can't be prepared.
+// Transcode one video on demand (from the editor) so it can be watched right
+// away. If its original isn't on this Mac, download just that one from iCloud via
+// osxphotos, then transcode. Returns ready:false with an `error` reason when even
+// the download can't happen (no Full Disk Access, osxphotos missing, etc.).
 app.post("/api/trips/:slug/video/:uuid/prepare", withTrip, async (req, res) => {
   const uuid = String(req.params.uuid).replace(/[^0-9A-Za-z-]/g, "");
   const mp4 = path.join(req.tp.web, `${uuid}.mp4`);
+  const makeVideos = path.join(ROOT, "scripts", "make-videos.mjs");
   if (fs.existsSync(mp4)) return res.json({ ok: true, ready: true });
-  const r = await runScript(process.execPath, [path.join(ROOT, "scripts", "make-videos.mjs"), req.params.slug, uuid]);
-  const ready = fs.existsSync(mp4);
-  res.json({ ok: r.code === 0 && ready, ready, log: r.out || r.err });
+
+  // 1) transcode straight away if we already have a local original
+  await runScript(process.execPath, [makeVideos, req.params.slug, uuid]);
+  if (fs.existsSync(mp4)) return res.json({ ok: true, ready: true });
+
+  // 2) not local → pull just this one original from iCloud, then transcode again
+  await fsp.mkdir(req.tp.exportRaw, { recursive: true });
+  const dl = await runScript("osxphotos", [
+    "export", req.tp.exportRaw, "--uuid", uuid,
+    "--download-missing", "--use-photokit", "--filename", "{uuid}", "--skip-edited", "--retry", "2",
+  ]);
+  await runScript(process.execPath, [makeVideos, req.params.slug, uuid]);
+  if (fs.existsSync(mp4)) return res.json({ ok: true, ready: true });
+
+  // still not ready → explain why, so the UI can guide the user
+  const err = dl.err || "";
+  const error =
+    dl.code === -1 || /ENOENT|not found|command not found/i.test(err) ? "not_found"
+    : /full disk access|not authorized|operation not permitted|permission|photos library/i.test(err) ? "permission"
+    : "download_failed";
+  res.json({ ok: false, ready: false, error, log: (dl.err || dl.out || "").slice(-1500) });
 });
 
 // live progress of an in-flight make-web run (for a progress bar); running:false when idle
