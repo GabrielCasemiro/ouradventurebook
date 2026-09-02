@@ -210,7 +210,10 @@ function VideoView({ slug, photo }: { slug: string; photo: Photo }) {
     <div className="lb-vidpending">
       {poster && <img src={poster} alt={photo.filename} />}
       {status === "preparing" ? (
-        <span className="lb-vidbadge">Downloading and preparing video…</span>
+        <div className="lb-vidbadge">
+          <span className="lb-spinner" aria-hidden="true" />
+          Downloading and preparing video…
+        </div>
       ) : status === "error" ? (
         <div className="lb-vidbadge">
           {errMsg}
