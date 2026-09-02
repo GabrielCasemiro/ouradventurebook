@@ -154,16 +154,28 @@ export function Lightbox({
 // clicking ▶ transcodes it on demand and then plays it. It only can't play when
 // the original isn't on this Mac (e.g. still in iCloud) — then we say so plainly.
 type VideoStatus = "idle" | "preparing" | "ready" | "error";
+function messageForError(code?: string) {
+  switch (code) {
+    case "permission":
+      return "To fetch this video from iCloud, your terminal needs Full Disk Access. Grant it in System Settings › Privacy & Security › Full Disk Access, restart the app, then try again.";
+    case "not_found":
+      return "osxphotos isn't installed, so the original can't be downloaded. Run npm run setup, then try again.";
+    default:
+      return "Couldn't download this video's original from iCloud. Check your connection and try again.";
+  }
+}
 function VideoView({ slug, photo }: { slug: string; photo: Photo }) {
   const { uuid } = photo;
   const poster = photo.hasThumb ? thumbUrl(slug, uuid) : undefined;
   const [status, setStatus] = useState<VideoStatus>(photo.hasVideo ? "ready" : "idle");
   const [autoplay, setAutoplay] = useState(false);
+  const [errMsg, setErrMsg] = useState("");
 
   // reset when navigating to another item in the lightbox
   useEffect(() => {
     setStatus(photo.hasVideo ? "ready" : "idle");
     setAutoplay(false);
+    setErrMsg("");
   }, [uuid, photo.hasVideo]);
 
   const prepareAndPlay = async () => {
@@ -171,8 +183,9 @@ function VideoView({ slug, photo }: { slug: string; photo: Photo }) {
     try {
       const r = await api.prepareVideo(slug, uuid);
       if (r.ready) { setAutoplay(true); setStatus("ready"); }
-      else setStatus("error");
+      else { setErrMsg(messageForError(r.error)); setStatus("error"); }
     } catch {
+      setErrMsg("Something went wrong preparing this video. Try again.");
       setStatus("error");
     }
   };
@@ -197,11 +210,12 @@ function VideoView({ slug, photo }: { slug: string; photo: Photo }) {
     <div className="lb-vidpending">
       {poster && <img src={poster} alt={photo.filename} />}
       {status === "preparing" ? (
-        <span className="lb-vidbadge">Preparing video…</span>
+        <span className="lb-vidbadge">Downloading and preparing video…</span>
       ) : status === "error" ? (
-        <span className="lb-vidbadge">
-          Can't play this video yet — its original isn't on this Mac. Download it in Photos (or run Export), then try again.
-        </span>
+        <div className="lb-vidbadge">
+          {errMsg}
+          <button className="lb-retry" onClick={prepareAndPlay}>Try again</button>
+        </div>
       ) : (
         <button className="lb-playbtn" onClick={prepareAndPlay} aria-label="Play video" title="Play video">▶</button>
       )}
