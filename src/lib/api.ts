@@ -37,8 +37,10 @@ export const api = {
     fetch(`${base(slug)}/export/prepare`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items, options }) }).then(j),
   exportFinish: (slug: string): Promise<{ ok: boolean; log: string }> => fetch(`${base(slug)}/export/finish`, { method: "POST" }).then(j),
   prepareWeb: (slug: string): Promise<{ ok: boolean; log: string }> => fetch(`${base(slug)}/web/prepare`, { method: "POST" }).then(j),
-  prepareVideo: (slug: string, uuid: string): Promise<{ ok: boolean; ready: boolean; error?: string; log?: string }> =>
+  prepareVideo: (slug: string, uuid: string): Promise<{ status: "running" | "ready" | "error"; error?: string }> =>
     fetch(`${base(slug)}/video/${encodeURIComponent(uuid)}/prepare`, { method: "POST" }).then(j),
+  videoStatus: (slug: string, uuid: string): Promise<{ status: "idle" | "running" | "ready" | "error"; error?: string }> =>
+    fetch(`${base(slug)}/video/${encodeURIComponent(uuid)}/status`).then(j),
   webProgress: (slug: string): Promise<{ running: boolean; done: number; total: number }> => fetch(`${base(slug)}/web/progress`).then(j),
   uploadPhotos: (
     slug: string,
