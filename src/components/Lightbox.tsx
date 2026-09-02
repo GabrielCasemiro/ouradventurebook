@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../App";
 import { api, thumbUrl, videoUrl } from "../lib/api";
 import type { Photo } from "../lib/types";
@@ -170,20 +170,55 @@ function VideoView({ slug, photo }: { slug: string; photo: Photo }) {
   const [status, setStatus] = useState<VideoStatus>(photo.hasVideo ? "ready" : "idle");
   const [autoplay, setAutoplay] = useState(false);
   const [errMsg, setErrMsg] = useState("");
+  // whether to start playing as soon as it's ready (true only right after a click)
+  const playWhenReady = useRef(false);
 
-  // reset when navigating to another item in the lightbox
+  // when the item changes, reset and reconcile with the server: a prepare job may
+  // already be running in the background (e.g. started before the lightbox closed)
   useEffect(() => {
-    setStatus(photo.hasVideo ? "ready" : "idle");
     setAutoplay(false);
     setErrMsg("");
-  }, [uuid, photo.hasVideo]);
+    playWhenReady.current = false;
+    if (photo.hasVideo) { setStatus("ready"); return; }
+    setStatus("idle");
+    let cancelled = false;
+    api.videoStatus(slug, uuid).then((s) => {
+      if (cancelled) return;
+      if (s.status === "ready") setStatus("ready");
+      else if (s.status === "running") setStatus("preparing");
+      // idle/error → keep the ▶ button so the user can (re)start it
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [uuid, photo.hasVideo, slug]);
+
+  // poll while preparing. Stopping (unmount / navigate away) does NOT stop the
+  // server job — it finishes in the background and we pick it up on return.
+  useEffect(() => {
+    if (status !== "preparing") return;
+    let alive = true;
+    let timer = 0;
+    const tick = async () => {
+      try {
+        const s = await api.videoStatus(slug, uuid);
+        if (!alive) return;
+        if (s.status === "ready") { if (playWhenReady.current) setAutoplay(true); setStatus("ready"); return; }
+        if (s.status === "error") { setErrMsg(messageForError(s.error)); setStatus("error"); return; }
+      } catch {}
+      if (alive) timer = window.setTimeout(tick, 1500);
+    };
+    timer = window.setTimeout(tick, 700);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [status, slug, uuid]);
 
   const prepareAndPlay = async () => {
+    playWhenReady.current = true;
+    setErrMsg("");
     setStatus("preparing");
     try {
       const r = await api.prepareVideo(slug, uuid);
-      if (r.ready) { setAutoplay(true); setStatus("ready"); }
-      else { setErrMsg(messageForError(r.error)); setStatus("error"); }
+      if (r.status === "ready") { setAutoplay(true); setStatus("ready"); }
+      else if (r.status === "error") { setErrMsg(messageForError(r.error)); setStatus("error"); }
+      // running → the poll effect takes over and plays when ready
     } catch {
       setErrMsg("Something went wrong preparing this video. Try again.");
       setStatus("error");
