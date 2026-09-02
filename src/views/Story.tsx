@@ -1,5 +1,5 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, photoUrl } from "../lib/api";
+import { api, photoUrl, videoUrl } from "../lib/api";
 import type { Manifest, Project, Photo, TripConfig } from "../lib/types";
 import { iterateSlots, getSlot } from "../lib/album";
 import { Music } from "./Music";
@@ -59,13 +59,17 @@ export function Story({ slug }: { slug: string }) {
       sec.items.push(it);
     }
     const daysPresent = sections.map((s) => ({ dayIndex: s.dayIndex, date: s.date }));
+    // the cover is always a photo (never a video poster)
+    const isPhoto = (i: StoryItem) => i.photo.type !== "video";
     const cover =
-      ordered.find((i) => i.photo.isFavorite && i.photo.width > i.photo.height)?.photo ||
-      ordered.find((i) => i.photo.width > i.photo.height)?.photo || ordered[0]?.photo || null;
+      ordered.find((i) => isPhoto(i) && i.photo.isFavorite && i.photo.width > i.photo.height)?.photo ||
+      ordered.find((i) => isPhoto(i) && i.photo.width > i.photo.height)?.photo ||
+      ordered.find(isPhoto)?.photo || ordered[0]?.photo || null;
     const stats = { dias: sections.length, fotos: ordered.length, legendas: ordered.filter((i) => i.caption.trim()).length };
-    const missingHd = ordered.filter((i) => !i.photo.hd).length;
+    // videos render an .mp4, not an HD .jpg, so they never count as "missing HD"
+    const missingHd = ordered.filter((i) => isPhoto(i) && !i.photo.hd).length;
     // rendered from a local preview (not the true original) → could be sharper if the original is downloaded
-    const softCount = ordered.filter((i) => i.photo.hd && i.photo.hdSource !== "original").length;
+    const softCount = ordered.filter((i) => isPhoto(i) && i.photo.hd && i.photo.hdSource !== "original").length;
     const mapPoints: MapPoint[] = ordered
       .filter((i) => i.photo.meta?.lat != null && i.photo.meta?.lng != null)
       .map((i) => ({ lat: i.photo.meta!.lat!, lng: i.photo.meta!.lng!, uuid: i.uuid, caption: i.caption, dayIndex: i.dayIndex }));
@@ -267,9 +271,24 @@ function StoryPhoto({ item }: { item: StoryItem }) {
   const slug = useSlug();
   const ref = useReveal<HTMLElement>();
   const portrait = item.photo.height > item.photo.width;
+  const isVideo = item.photo.type === "video";
   return (
     <figure className={`story-photo reveal ${portrait ? "portrait" : "landscape"}`} ref={ref}>
-      <div className="story-photo-frame"><img src={photoUrl(slug, item.uuid, item.photo.hdSource)} loading="lazy" alt={item.caption || item.photo.filename} /></div>
+      <div className="story-photo-frame">
+        {isVideo && item.photo.hasVideo ? (
+          // full clip, poster shown until the visitor clicks play (nothing preloads)
+          <video
+            src={videoUrl(slug, item.uuid)}
+            poster={photoUrl(slug, item.uuid, item.photo.hdSource)}
+            controls
+            playsInline
+            preload="none"
+          />
+        ) : (
+          <img src={photoUrl(slug, item.uuid, item.photo.hdSource)} loading="lazy" alt={item.caption || item.photo.filename} />
+        )}
+        {isVideo && !item.photo.hasVideo && <span className="story-play" aria-hidden="true">▶</span>}
+      </div>
       {item.caption.trim() && <figcaption>{item.caption}</figcaption>}
     </figure>
   );

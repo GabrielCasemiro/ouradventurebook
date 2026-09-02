@@ -177,6 +177,7 @@ export function Album({ goCuradoria }: { goCuradoria: () => void }) {
                 title={`Day ${p.dayIndex}`}
               >
                 <img src={thumbUrl(slug, p.uuid)} loading="lazy" alt="" draggable={false} />
+                {p.type === "video" && <span className="media-badge sm">▶</span>}
                 <button
                   className="tray-remove"
                   onClick={(e) => { e.stopPropagation(); setConfirmRemove(p.uuid); }}
@@ -273,6 +274,7 @@ function SideView({
                     onDragEnd={() => setDrag(null)}
                   >
                     <img src={thumbUrl(slug, uuid!)} loading="lazy" alt="" draggable={false} />
+                    {photo.type === "video" && <span className="media-badge sm">▶</span>}
                     <button className="pocket-remove" onClick={() => removeSlot(pos)} title="Remove from slot">
                       ✕
                     </button>

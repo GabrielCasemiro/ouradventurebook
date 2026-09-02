@@ -64,15 +64,18 @@ async function main() {
   if (!manifest || !project) die(`Missing manifest/project for ${slug} — build the catalog first.`);
   const byUuid = new Map(manifest.photos.map((p) => [p.uuid, p]));
 
-  // sheet order
+  // sheet order — the printed book is photos only; any placed video is skipped.
   const items = [];
+  let skippedVideos = 0;
   for (const sheet of project.album.sheets)
     for (const side of ["front", "back"])
-      for (const u of sheet[side])
-        if (u && byUuid.get(u)) {
-          const ph = byUuid.get(u);
-          items.push({ uuid: u, caption: project.photos[u]?.caption || "", dayIndex: ph.dayIndex, w: ph.width, h: ph.height });
-        }
+      for (const u of sheet[side]) {
+        const ph = u ? byUuid.get(u) : null;
+        if (!ph) continue;
+        if (ph.type === "video") { skippedVideos++; continue; }
+        items.push({ uuid: u, caption: project.photos[u]?.caption || "", dayIndex: ph.dayIndex, w: ph.width, h: ph.height });
+      }
+  if (skippedVideos) console.log(`• Skipped ${skippedVideos} video(s) — the printed book is photos only.`);
   if (!items.length) die("No photos placed in the album.");
 
   const dayDate = (idx) => manifest.days.find((d) => d.index === idx)?.date || "";

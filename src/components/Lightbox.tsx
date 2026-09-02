@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../App";
-import { thumbUrl } from "../lib/api";
+import { api, thumbUrl, videoUrl } from "../lib/api";
 import type { Photo } from "../lib/types";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -119,7 +119,9 @@ export function Lightbox({
 
       <div className="lb-stage" onClick={(e) => e.stopPropagation()}>
         <div className="lb-imgwrap">
-          {photo.hasThumb ? (
+          {photo.type === "video" ? (
+            <VideoView slug={slug} photo={photo} />
+          ) : photo.hasThumb ? (
             <img src={thumbUrl(slug, uuid)} alt={photo.filename} />
           ) : (
             <div className="no-thumb big">no thumbnail</div>
@@ -144,6 +146,65 @@ export function Lightbox({
           <p className="lb-hint">← → to navigate · Esc to close</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// A video plays right here in the editor. If its web render doesn't exist yet,
+// clicking ▶ transcodes it on demand and then plays it. It only can't play when
+// the original isn't on this Mac (e.g. still in iCloud) — then we say so plainly.
+type VideoStatus = "idle" | "preparing" | "ready" | "error";
+function VideoView({ slug, photo }: { slug: string; photo: Photo }) {
+  const { uuid } = photo;
+  const poster = photo.hasThumb ? thumbUrl(slug, uuid) : undefined;
+  const [status, setStatus] = useState<VideoStatus>(photo.hasVideo ? "ready" : "idle");
+  const [autoplay, setAutoplay] = useState(false);
+
+  // reset when navigating to another item in the lightbox
+  useEffect(() => {
+    setStatus(photo.hasVideo ? "ready" : "idle");
+    setAutoplay(false);
+  }, [uuid, photo.hasVideo]);
+
+  const prepareAndPlay = async () => {
+    setStatus("preparing");
+    try {
+      const r = await api.prepareVideo(slug, uuid);
+      if (r.ready) { setAutoplay(true); setStatus("ready"); }
+      else setStatus("error");
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  if (status === "ready") {
+    return (
+      <video
+        className="lb-video"
+        src={videoUrl(slug, uuid)}
+        poster={poster}
+        controls
+        autoPlay={autoplay}
+        playsInline
+        // metadata (not none) so a paused video still shows a frame + the native
+        // play button instead of an empty black box; it won't play until clicked
+        preload={autoplay ? "auto" : "metadata"}
+      />
+    );
+  }
+
+  return (
+    <div className="lb-vidpending">
+      {poster && <img src={poster} alt={photo.filename} />}
+      {status === "preparing" ? (
+        <span className="lb-vidbadge">Preparing video…</span>
+      ) : status === "error" ? (
+        <span className="lb-vidbadge">
+          Can't play this video yet — its original isn't on this Mac. Download it in Photos (or run Export), then try again.
+        </span>
+      ) : (
+        <button className="lb-playbtn" onClick={prepareAndPlay} aria-label="Play video" title="Play video">▶</button>
+      )}
     </div>
   );
 }

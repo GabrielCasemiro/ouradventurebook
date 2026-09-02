@@ -37,6 +37,8 @@ export const api = {
     fetch(`${base(slug)}/export/prepare`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items, options }) }).then(j),
   exportFinish: (slug: string): Promise<{ ok: boolean; log: string }> => fetch(`${base(slug)}/export/finish`, { method: "POST" }).then(j),
   prepareWeb: (slug: string): Promise<{ ok: boolean; log: string }> => fetch(`${base(slug)}/web/prepare`, { method: "POST" }).then(j),
+  prepareVideo: (slug: string, uuid: string): Promise<{ ok: boolean; ready: boolean; log?: string }> =>
+    fetch(`${base(slug)}/video/${encodeURIComponent(uuid)}/prepare`, { method: "POST" }).then(j),
   webProgress: (slug: string): Promise<{ running: boolean; done: number; total: number }> => fetch(`${base(slug)}/web/progress`).then(j),
   uploadPhotos: (
     slug: string,
@@ -67,3 +69,7 @@ export const thumbUrl = (slug: string, uuid: string) => `/trips/${slug}/thumbs/$
 // starts serving a different (upgraded) image.
 export const photoUrl = (slug: string, uuid: string, v?: string) =>
   `/trips/${slug}/photo/${uuid}${v ? `?v=${encodeURIComponent(v)}` : ""}`;
+// Web-playable MP4 for a video item, streamed with HTTP Range support.
+// No file extension in the path: the server resolves it to web/<uuid>.mp4 and
+// sends the correct video/mp4 Content-Type from the file itself.
+export const videoUrl = (slug: string, uuid: string) => `/trips/${slug}/video/${uuid}`;

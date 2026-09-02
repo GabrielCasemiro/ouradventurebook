@@ -59,9 +59,11 @@ async function pool(items, worker, size) {
 
 async function main() {
   await fsp.mkdir(tp.thumbs, { recursive: true });
-  const photos = parsePhotos().filter((p) => !p.ismovie);
+  // Videos are kept (they play in the digital album). A poster still comes from a
+  // JPEG derivative when Photos has one; make-videos.mjs fills in the rest.
+  const photos = parsePhotos();
   if (!photos.length) die("0 photos in photos.json.");
-  console.log(`• [${slug}] Generating thumbnails for ${photos.length} photos…`);
+  console.log(`• [${slug}] Generating thumbnails for ${photos.length} item(s)…`);
   // live progress for the UI (polled by the server); removed when done
   const progressFile = path.join(tp.thumbs, ".progress.json");
   const writeProgress = (d) => { try { fs.writeFileSync(progressFile, JSON.stringify({ done: d, total: photos.length })); } catch {} };
@@ -83,6 +85,8 @@ async function main() {
       uuid, filename: p.original_filename || p.filename || uuid, date: localDate, dayIndex: dayIndexFor(localDate),
       width: p.width || p.original_width || 0, height: p.height || p.original_height || 0,
       isFavorite: !!p.favorite, hasThumb, sig: dupSig(p), meta: photoMeta(p),
+      type: p.ismovie ? "video" : "photo",
+      duration: p.ismovie ? (p.exif_info?.duration ?? p.duration ?? undefined) : undefined,
     };
   }, CONCURRENCY);
 

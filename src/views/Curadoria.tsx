@@ -10,6 +10,7 @@ const fmtDate = (iso: string) => {
   return `${d}/${m}`;
 };
 const fmtElapsed = (ms: number) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+const fmtDur = (sec: number) => { const s = Math.round(sec); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
 export function Curadoria({
   activeDay,
@@ -370,6 +371,9 @@ function PhotoCard({
           <img src={thumbUrl(slug, photo.uuid)} loading="lazy" alt={photo.filename} draggable={false} />
         ) : (
           <div className="no-thumb">no thumbnail</div>
+        )}
+        {photo.type === "video" && (
+          <span className="media-badge">▶{photo.duration ? ` ${fmtDur(photo.duration)}` : ""}</span>
         )}
         <button
           className="del"

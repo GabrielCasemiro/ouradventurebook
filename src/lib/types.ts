@@ -24,6 +24,9 @@ export interface Photo {
   source?: string;
   hd?: boolean; // a high-res web render exists (else served as a low-res thumbnail)
   hdSource?: "original" | "preview"; // what that render was made from
+  type?: "photo" | "video"; // videos play in the digital album; the printed book keeps photos only
+  duration?: number; // clip length in seconds (videos only), when known
+  hasVideo?: boolean; // a web-playable .mp4 render exists (videos only)
 }
 
 export interface DayInfo {
