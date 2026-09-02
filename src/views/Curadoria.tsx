@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../App";
 import { api } from "../lib/api";
 import { thumbUrl } from "../lib/api";
@@ -35,7 +35,25 @@ export function Curadoria({
   const [importManual, setImportManual] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importCopied, setImportCopied] = useState(false);
+  const [dragUuid, setDragUuid] = useState<string | null>(null);
+  const [dragOverDay, setDragOverDay] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // effective day of a photo: a manual override (dragged to another day) wins
+  const dayOf = useCallback(
+    (p: Photo) => project.photos[p.uuid]?.dayIndex ?? p.dayIndex,
+    [project]
+  );
+
+  const moveToDay = (uuid: string, day: number) => {
+    const p = manifest.photos.find((x) => x.uuid === uuid);
+    if (!p) return;
+    const cur = project.photos[uuid]?.dayIndex ?? p.dayIndex;
+    if (cur === day) return;
+    patchPhoto(uuid, { dayIndex: day });
+    setToast(`${p.type === "video" ? "Video" : "Photo"} moved to Day ${day}`);
+    window.setTimeout(() => setToast(null), 2500);
+  };
 
   useEffect(() => {
     if (showImport && importCmd === null) api.importInfo(slug).then((i) => setImportCmd(i.command)).catch(() => {});
@@ -100,13 +118,20 @@ export function Curadoria({
   const chosenByDay = useMemo(() => {
     const counts: Record<number, number> = {};
     manifest.photos.forEach((p) => {
-      if (project.photos[p.uuid]?.chosen) counts[p.dayIndex] = (counts[p.dayIndex] || 0) + 1;
+      if (project.photos[p.uuid]?.chosen) counts[dayOf(p)] = (counts[dayOf(p)] || 0) + 1;
     });
     return counts;
-  }, [manifest, project]);
+  }, [manifest, project, dayOf]);
+
+  // total photos per day (respecting overrides) — drives the timeline counts live
+  const dayTotals = useMemo(() => {
+    const counts: Record<number, number> = {};
+    manifest.photos.forEach((p) => { counts[dayOf(p)] = (counts[dayOf(p)] || 0) + 1; });
+    return counts;
+  }, [manifest, dayOf]);
 
   const dayPhotos = useMemo(() => {
-    let list = manifest.photos.filter((p) => p.dayIndex === activeDay);
+    let list = manifest.photos.filter((p) => dayOf(p) === activeDay);
     if (onlyChosen) list = list.filter((p) => project.photos[p.uuid]?.chosen);
     if (hideDupes) {
       const sigOf = (p: Photo) => p.sig || p.uuid;
@@ -122,10 +147,10 @@ export function Curadoria({
       });
     }
     return list;
-  }, [manifest, project, activeDay, onlyChosen, hideDupes]);
+  }, [manifest, project, activeDay, onlyChosen, hideDupes, dayOf]);
 
   const dupCount = useMemo(() => {
-    const all = manifest.photos.filter((p) => p.dayIndex === activeDay);
+    const all = manifest.photos.filter((p) => dayOf(p) === activeDay);
     const seen = new Set<string>();
     let dupes = 0;
     for (const p of all) {
@@ -134,7 +159,7 @@ export function Curadoria({
       else seen.add(s);
     }
     return dupes;
-  }, [manifest, activeDay]);
+  }, [manifest, activeDay, dayOf]);
 
   const activeDayInfo = manifest.days.find((d) => d.index === activeDay);
 
@@ -179,13 +204,27 @@ export function Curadoria({
   return (
     <div className="curadoria">
       <aside className="timeline">
-        <div className="timeline-head">Timeline</div>
+        <div className="timeline-head">{dragUuid ? "Drop on a day to move it" : "Timeline"}</div>
         <ul>
           {manifest.days.map((d) => {
             const chosen = chosenByDay[d.index] || 0;
+            const cls = [d.index === activeDay ? "day on" : "day", dragOverDay === d.index ? "dropping" : ""].filter(Boolean).join(" ");
             return (
               <li key={d.index}>
-                <button className={d.index === activeDay ? "day on" : "day"} onClick={() => setActiveDay(d.index)}>
+                <button
+                  className={cls}
+                  onClick={() => setActiveDay(d.index)}
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types.includes("text/uuid")) { e.preventDefault(); setDragOverDay(d.index); }
+                  }}
+                  onDragLeave={() => setDragOverDay((v) => (v === d.index ? null : v))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const u = e.dataTransfer.getData("text/uuid");
+                    if (u) moveToDay(u, d.index);
+                    setDragOverDay(null); setDragUuid(null);
+                  }}
+                >
                   <span className="day-n">{d.index}</span>
                   <span className="day-meta">
                     <span className="day-label">Day {d.index}</span>
@@ -193,7 +232,7 @@ export function Curadoria({
                   </span>
                   <span className="day-counts">
                     {chosen > 0 && <span className="chip-chosen">{chosen}</span>}
-                    <span className="chip-total">{d.count}</span>
+                    <span className="chip-total">{dayTotals[d.index] || 0}</span>
                   </span>
                 </button>
               </li>
@@ -204,9 +243,9 @@ export function Curadoria({
 
       <section
         className={dragOver ? "gallery dragover" : "gallery"}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragOver={(e) => { if (e.dataTransfer.types.includes("text/uuid")) return; e.preventDefault(); setDragOver(true); }}
         onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
+        onDrop={(e) => { if (e.dataTransfer.types.includes("text/uuid")) return; e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
       >
         <input
           ref={fileRef}
@@ -259,6 +298,8 @@ export function Curadoria({
                 onCaption={(v) => patchPhoto(p.uuid, { caption: v })}
                 onOpen={() => setLightbox(p.uuid)}
                 onDelete={() => requestDelete(p.uuid)}
+                onDragStart={(e) => { e.dataTransfer.setData("text/uuid", p.uuid); e.dataTransfer.effectAllowed = "move"; setDragUuid(p.uuid); }}
+                onDragEnd={() => { setDragUuid(null); setDragOverDay(null); }}
               />
             ))}
           </div>
@@ -354,6 +395,8 @@ function PhotoCard({
   onCaption,
   onOpen,
   onDelete,
+  onDragStart,
+  onDragEnd,
 }: {
   slug: string;
   photo: Photo;
@@ -363,10 +406,12 @@ function PhotoCard({
   onCaption: (v: string) => void;
   onOpen: () => void;
   onDelete: () => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
 }) {
   return (
     <figure className={chosen ? "card chosen" : "card"}>
-      <div className="card-img" onClick={onOpen}>
+      <div className="card-img" onClick={onOpen} draggable onDragStart={onDragStart} onDragEnd={onDragEnd} title="Drag to a day to move it">
         {photo.hasThumb ? (
           <img src={thumbUrl(slug, photo.uuid)} loading="lazy" alt={photo.filename} draggable={false} />
         ) : (

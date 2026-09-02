@@ -47,6 +47,12 @@ const dayIndexFactory = (cfg) => {
 function mergedManifest(tp, cfg) {
   const base = readJSON(tp.manifest);
   const uploads = readJSON(tp.uploadsJson) || [];
+  // per-photo day overrides (user dragged a photo/video to a different day)
+  const dayOverrides = readJSON(tp.project)?.photos || {};
+  const overrideDay = (uuid, fallback) => {
+    const ov = dayOverrides[uuid]?.dayIndex;
+    return Number.isInteger(ov) ? Math.min(Math.max(ov, 1), cfg.days) : fallback;
+  };
   const startMs = Date.parse(cfg.startDate + "T00:00:00");
   // which photos have a high-res (HD) web render, and what it was rendered from
   const webSet = new Set(
@@ -70,6 +76,7 @@ function mergedManifest(tp, cfg) {
   );
   const photos = [...(base?.photos || []), ...uploads].map((p) => ({
     ...p,
+    dayIndex: overrideDay(p.uuid, p.dayIndex),
     hasThumb: p.hasThumb || thumbSet.has(p.uuid),
     hd: webSet.has(p.uuid),
     hdSource: webSet.has(p.uuid) ? webSources[p.uuid] || "preview" : undefined,
