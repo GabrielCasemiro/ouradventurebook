@@ -13,6 +13,8 @@ const MAX_W = 1920; // cap width at 1080p; portrait clips keep their height
 const die = (m) => { console.error("✖ " + m); process.exit(1); };
 
 const slug = resolveSlugFromArgs();
+// optional: a single uuid to transcode on demand (even if it isn't chosen/placed yet)
+const onlyUuid = process.argv[3] && !process.argv[3].startsWith("-") ? process.argv[3] : null;
 const tp = tripPaths(slug);
 const project = readJSON(tp.project) || die("No project.json for " + slug);
 if (!fs.existsSync(tp.photos)) die(`Missing ${slug}/photos.json — run the import first.`);
@@ -50,7 +52,10 @@ async function main() {
   await fsp.mkdir(tp.web, { recursive: true });
   await fsp.mkdir(tp.thumbs, { recursive: true });
   const byUuid = new Map(parsePhotos().map((p) => [p.uuid, p]));
-  const videos = [...used].filter((u) => byUuid.get(u)?.ismovie);
+  // a single explicit uuid (on-demand from the editor) takes priority over the
+  // chosen/placed set, so you can preview a video before adding it to the album
+  const candidates = onlyUuid ? [onlyUuid] : [...used];
+  const videos = candidates.filter((u) => byUuid.get(u)?.ismovie);
   if (!videos.length) { console.log(`• [${slug}] No videos to prepare.`); return; }
 
   console.log(`• [${slug}] Preparing ${videos.length} video(s)…`);

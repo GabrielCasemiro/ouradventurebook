@@ -868,11 +868,20 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 /* lightbox player */
 .lb-video { max-width: 100%; max-height: 85vh; display: block; background: #000; }
 .lb-vidpending { position: relative; display: grid; place-items: center; }
-.lb-vidpending img { max-width: 100%; max-height: 85vh; object-fit: contain; display: block; opacity: 0.7; }
+.lb-vidpending img { max-width: 100%; max-height: 85vh; object-fit: contain; display: block; }
 .lb-vidbadge {
-  position: absolute; padding: 8px 14px; border-radius: 999px; background: rgba(9,16,40,0.82);
-  color: #fff; font-size: 13px; font-weight: 600;
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  max-width: 80%; text-align: center; padding: 10px 16px; border-radius: 14px;
+  background: rgba(9,16,40,0.82); color: #fff; font-size: 13px; font-weight: 600; line-height: 1.4;
 }
+.lb-playbtn {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 76px; height: 76px; border: none; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; padding-left: 5px;
+  background: rgba(9,16,40,0.62); color: #fff; font-size: 28px;
+  transition: background 0.15s, transform 0.12s;
+}
+.lb-playbtn:hover { background: var(--gold, #e9b84d); color: #10204a; transform: translate(-50%, -50%) scale(1.06); }
 
 /* digital album (Story) video */
 .story-photo-frame video {

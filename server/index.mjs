@@ -602,6 +602,18 @@ app.post("/api/trips/:slug/web/prepare", withTrip, async (req, res) => {
   res.json({ ok: web.code === 0, log: [web.out || web.err, vid.out || vid.err].filter(Boolean).join("\n") });
 });
 
+// Transcode one video on demand (from the editor), so it can be watched right
+// away without opening the digital album. Returns ready:false with the log when
+// the original isn't on this Mac (e.g. still in iCloud) so it can't be prepared.
+app.post("/api/trips/:slug/video/:uuid/prepare", withTrip, async (req, res) => {
+  const uuid = String(req.params.uuid).replace(/[^0-9A-Za-z-]/g, "");
+  const mp4 = path.join(req.tp.web, `${uuid}.mp4`);
+  if (fs.existsSync(mp4)) return res.json({ ok: true, ready: true });
+  const r = await runScript(process.execPath, [path.join(ROOT, "scripts", "make-videos.mjs"), req.params.slug, uuid]);
+  const ready = fs.existsSync(mp4);
+  res.json({ ok: r.code === 0 && ready, ready, log: r.out || r.err });
+});
+
 // live progress of an in-flight make-web run (for a progress bar); running:false when idle
 app.get("/api/trips/:slug/web/progress", withTrip, (req, res) => {
   const f = path.join(req.tp.web, ".progress.json");
